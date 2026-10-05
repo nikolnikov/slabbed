@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { ApiError, api, imageUrl } from '../api'
 import { FlipIcon } from '../icons'
 import type { Card, CardInput } from '../types'
-import { formatGrade, optimizePhoto, photoSearchQuery } from '../utils'
+import { formatGrade, gradeBadgeClass, optimizePhoto, photoSearchQuery } from '../utils'
 import { Modal } from './Modal'
 import { PhotoSearch } from './PhotoSearch'
+import { ZoomableImage } from './ZoomableImage'
 
 type CardDetailProps = {
   card: Card
@@ -82,7 +83,7 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
       // Wishlist cards aren't owned yet, so only collection cards lead with their grade.
       titleBadge={
         card.list === 'wishlist' ? undefined : (
-          <span className={`grade-badge grade-badge--inline${card.grade === 10 ? ' grade-badge--gem' : ''}${card.isGraded ? '' : ' grade-badge--raw'}`}>
+          <span className={`${gradeBadgeClass(card)} grade-badge--inline`}>
             {formatGrade(card)}
           </span>
         )
@@ -95,7 +96,8 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
         <div className="card-detail">
           <div className="card-detail__media">
             {shown ? (
-              <img src={shown} alt={`${card.player} ${side}`} />
+              // Keyed by photo so flipping to the other side closes the loupe.
+              <ZoomableImage key={shown} src={shown} alt={`${card.player} ${side}`} />
             ) : (
               <div className="card-detail__no-photo">
                 <span className="card-tile__placeholder">{busy ? 'Adding photo…' : 'No photo'}</span>

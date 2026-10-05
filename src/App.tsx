@@ -159,6 +159,8 @@ function App() {
       <section className={listCards.length === 0 ? 'list-page--empty' : undefined}>
         <CardList
           key={list}
+          // Remembered per account and per list, so each keeps its own filters.
+          storageKey={profile ? `slabbbed:filters:${profile.id}:${list}` : undefined}
           title={list === 'collection' ? 'My collection' : 'My wishlist'}
           onAdd={() => startAdd(list)}
           cards={listCards}

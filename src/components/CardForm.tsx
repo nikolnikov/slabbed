@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { ApiError, api, imageUrl } from '../api'
-import type { CardInput, CardList, PhotoValue } from '../types'
+import { GRADERS } from '../constants'
+import type { CardInput, CardList, Grader, PhotoValue } from '../types'
 import { optimizePhoto, photoSearchQuery } from '../utils'
 import { Modal } from './Modal'
 import { PhotoInput } from './PhotoInput'
@@ -24,6 +25,7 @@ type CardFormProps = {
 
 type FormValues = {
   list: CardList
+  grader: Grader | ''
   certNumber: string
   grade: string
   gradeLabel: string
@@ -42,6 +44,7 @@ const refToPhoto = (ref: string | null): PhotoValue =>
 
 const toValues = (card: CardInput): FormValues => ({
   list: card.list,
+  grader: card.grader ?? '',
   certNumber: card.certNumber ?? '',
   grade: card.grade?.toString() ?? '',
   gradeLabel: card.gradeLabel ?? '',
@@ -101,11 +104,13 @@ export function CardForm({
       const grade = parsedGrade !== null && Number.isFinite(parsedGrade) ? parsedGrade : null
       const certNumber = orNull(values.certNumber)
       const gradeLabel = orNull(values.gradeLabel)
+      const grader = values.grader || null
       await onSave({
         ...initial,
         list: values.list,
         // No graded checkbox: a card counts as graded when it has any grading details.
-        isGraded: certNumber !== null || grade !== null || gradeLabel !== null,
+        isGraded: grader !== null || certNumber !== null || grade !== null || gradeLabel !== null,
+        grader,
         certNumber,
         grade,
         gradeLabel,
@@ -150,9 +155,11 @@ export function CardForm({
             <PhotoInput label="Back" value={back} onChange={setBack} />
           </div>
           {!front && (
-            <button type="button" className="button button--small" onClick={() => setFindingPhoto(true)}>
-              Find a photo online
-            </button>
+            <div className="card-form__find-photo">
+              <button type="button" className="button button--small" onClick={() => setFindingPhoto(true)}>
+                Find a photo online
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -166,6 +173,7 @@ export function CardForm({
               cardNumber: orNull(values.cardNumber),
               variety: orNull(values.variety),
               isGraded: values.grade !== '',
+              grader: values.grader || null,
               grade: values.grade ? Number(values.grade) : null,
             })}
             onPick={(url) => {
@@ -179,16 +187,29 @@ export function CardForm({
 
       {/* Wishlist cards aren't owned yet, so they have no cert or grade. */}
       {values.list !== 'wishlist' && (
-        <div className="card-form__row">
+        <>
           <label className="field">
             <span className="field__label">Cert #</span>
             <input className="field__input" inputMode="numeric" pattern="\d*" {...field('certNumber')} />
           </label>
-          <label className="field field--narrow">
-            <span className="field__label">Grade</span>
-            <input className="field__input" type="number" min="1" max="10" step="0.5" {...field('grade')} />
-          </label>
-        </div>
+          <div className="card-form__row">
+            <label className="field">
+              <span className="field__label">Grader</span>
+              <select className="field__input" value={values.grader} onChange={(e) => set('grader', e.target.value as Grader | '')}>
+                <option value="">—</option>
+                {GRADERS.map((grader) => (
+                  <option key={grader} value={grader}>
+                    {grader}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field__label">Grade</span>
+              <input className="field__input" type="number" min="1" max="10" step="0.5" {...field('grade')} />
+            </label>
+          </div>
+        </>
       )}
       {!hideDerivedFields && values.list !== 'wishlist' && (
         <label className="field">

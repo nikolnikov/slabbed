@@ -44,8 +44,20 @@ const canvasToBlob = (canvas: HTMLCanvasElement, type: string, quality: number) 
 export type CropRect = { x: number; y: number; width: number; height: number }
 
 /**
+ * Encodes with a bundled WebP encoder (WASM), for browsers whose canvas can't produce WebP.
+ * Loaded on first use only, so browsers that encode WebP natively never download it.
+ */
+const encodeWebpInWasm = async (canvas: HTMLCanvasElement): Promise<Blob> => {
+  const { default: encode } = await import('@jsquash/webp/encode')
+  const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height)
+  const data = await encode(pixels, { quality: Math.round(WEBP_QUALITY * 100) })
+  return new Blob([data], { type: 'image/webp' })
+}
+
+/**
  * Scales a photo (or the cropped region of it) down to MAX_PHOTO_DIMENSION and re-encodes it as WebP.
- * Browsers that can't encode WebP (older Safari) silently return PNG from toBlob, so those fall back to JPEG.
+ * Safari (every iPhone browser) can't encode WebP from a canvas and silently returns PNG from toBlob,
+ * so there the bundled encoder takes over; JPEG is the last resort if that fails to load.
  */
 export const optimizePhoto = async (file: Blob, maxDimension = MAX_PHOTO_DIMENSION, crop?: CropRect): Promise<Blob> => {
   const bitmap = await createImageBitmap(await toDecodablePhoto(file), { imageOrientation: 'from-image' })
@@ -59,6 +71,11 @@ export const optimizePhoto = async (file: Blob, maxDimension = MAX_PHOTO_DIMENSI
 
   const webp = await canvasToBlob(canvas, 'image/webp', WEBP_QUALITY)
   if (webp?.type === 'image/webp') return webp
+  try {
+    return await encodeWebpInWasm(canvas)
+  } catch (error) {
+    console.warn('WebP encoder unavailable, saving as JPEG', error)
+  }
   const jpeg = await canvasToBlob(canvas, 'image/jpeg', JPEG_QUALITY)
   if (!jpeg) throw new Error('Could not process photo')
   return jpeg
@@ -72,10 +89,17 @@ export const blobToDataUrl = (blob: Blob): Promise<string> =>
     reader.readAsDataURL(blob)
   })
 
-export const formatGrade = (card: Pick<Card, 'isGraded' | 'grade' | 'gradeLabel'>): string => {
+export const formatGrade = (card: Pick<Card, 'isGraded' | 'grader' | 'grade' | 'gradeLabel'>): string => {
   if (!card.isGraded) return 'Raw'
-  if (card.grade !== null) return `PSA ${card.grade}`
-  return card.gradeLabel ? `PSA ${card.gradeLabel}` : 'PSA'
+  const grade = card.grade ?? card.gradeLabel
+  return [card.grader, grade].filter((part) => part !== null).join(' ') || 'Graded'
+}
+
+/** Badge colors: PSA red (gold for a 10), BGS black, SGC green, TAG blue, raw gray. */
+export const gradeBadgeClass = (card: Pick<Card, 'isGraded' | 'grader' | 'grade'>): string => {
+  if (!card.isGraded) return 'grade-badge grade-badge--raw'
+  if (card.grader && card.grader !== 'PSA') return `grade-badge grade-badge--${card.grader.toLowerCase()}`
+  return `grade-badge${card.grade === 10 ? ' grade-badge--gem' : ''}`
 }
 
 export const cardSubtitle = (card: Pick<Card, 'year' | 'brand' | 'cardNumber'>): string =>
@@ -83,7 +107,7 @@ export const cardSubtitle = (card: Pick<Card, 'year' | 'brand' | 'cardNumber'>):
 
 /** Search text for finding listing photos, e.g. "1960 Topps Earl Averill #39 PSA 8". */
 export const photoSearchQuery = (
-  card: Pick<Card, 'year' | 'brand' | 'player' | 'cardNumber' | 'variety' | 'isGraded' | 'grade'>
+  card: Pick<Card, 'year' | 'brand' | 'player' | 'cardNumber' | 'variety' | 'isGraded' | 'grader' | 'grade'>
 ): string =>
   [
     card.year,
@@ -91,7 +115,7 @@ export const photoSearchQuery = (
     card.player,
     card.cardNumber && `#${card.cardNumber}`,
     card.variety,
-    card.isGraded && card.grade !== null && `PSA ${card.grade}`,
+    card.isGraded && card.grade !== null && `${card.grader ?? ''} ${card.grade}`.trim(),
   ]
     .filter(Boolean)
     .join(' ')
@@ -99,12 +123,26 @@ export const photoSearchQuery = (
 export const uniqueSorted =<T>(values: (T | null)[], compare: (a: T, b: T) => number): T[] =>
   [...new Set(values.filter((v): v is T => v !== null))].sort(compare)
 
+const NAME_SUFFIX = /^(jr|sr|ii|iii|iv|v)\.?$/i
+
+/** "Ken Griffey Jr." -> "Griffey": the last word of the name, skipping suffixes. */
+const lastName = (name: string): string => {
+  const words = name.trim().split(/\s+/)
+  while (words.length > 1 && NAME_SUFFIX.test(words[words.length - 1])) words.pop()
+  return words[words.length - 1] ?? ''
+}
+
+/** Sorts by last name, then by full name (so "Hank Aaron" and "Tommie Aaron" stay in a fixed order). */
+const compareByLastName = (a: string, b: string) =>
+  lastName(a).localeCompare(lastName(b), undefined, { sensitivity: 'base' }) ||
+  a.localeCompare(b, undefined, { sensitivity: 'base' })
+
 export const filterCards = (cards: Card[], filters: CardFilters): Card[] => {
   const search = filters.search.trim().toLowerCase()
   const filtered = cards.filter((card) => {
     if (filters.graded === 'graded' && !card.isGraded) return false
     if (filters.graded === 'ungraded' && card.isGraded) return false
-    if (filters.sport && card.sport !== filters.sport) return false
+    if (filters.grader && card.grader !== filters.grader) return false
     if (filters.grades.length > 0 && (card.grade === null || !filters.grades.includes(card.grade))) return false
     if (search) {
       const haystack = [card.player, card.year, card.brand, card.variety, card.cardNumber, card.certNumber, card.notes]
@@ -120,7 +158,7 @@ export const filterCards = (cards: Card[], filters: CardFilters): Card[] => {
     recent: (a, b) => b.createdAt.localeCompare(a.createdAt),
     grade: (a, b) => (b.grade ?? -1) - (a.grade ?? -1),
     year: (a, b) => (b.year ?? '').localeCompare(a.year ?? ''),
-    player: (a, b) => a.player.localeCompare(b.player),
+    player: (a, b) => compareByLastName(a.player, b.player),
   }
   return filtered.sort(compare[filters.sort])
 }

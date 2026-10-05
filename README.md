@@ -1,6 +1,7 @@
 # Slabbbed!
 
-Track your PSA graded (and raw) sports cards, keep a wishlist, and share either with other collectors.
+Track your graded (PSA, BGS, SGC or TAG) and raw sports cards, keep a wishlist, and share either with
+other collectors.
 
 Runs as a Cloudflare Worker: the React app is served as static assets, and `/api/*` is handled by
 [worker/index.ts](worker/index.ts), backed by D1 (data) and R2 (card photos).
@@ -30,6 +31,13 @@ npx wrangler secret put EBAY_CLIENT_SECRET
 ```
 
 Then `npm run deploy`.
+
+`schema.sql` creates new databases with every column. An existing database is updated by running the
+files in `worker/migrations/` that it hasn't had yet, in order, before deploying code that needs them:
+
+```sh
+npx wrangler d1 execute slabbed-db --remote --file=worker/migrations/0002-card-grader.sql
+```
 
 ## How scanning works
 

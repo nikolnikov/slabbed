@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { DEFAULT_FILTERS } from '../constants'
+import { DEFAULT_FILTERS, GRADERS, SORT_OPTIONS } from '../constants'
 import { FilterIcon, PlusIcon } from '../icons'
-import type { Card } from '../types'
+import type { Card, CardFilters } from '../types'
 import { filterCards, uniqueSorted } from '../utils'
 import { CardFiltersBar } from './CardFiltersBar'
 import { CardTile } from './CardTile'
@@ -10,6 +10,35 @@ import { CardTile } from './CardTile'
 // Tiles are rendered in batches as you scroll, so big lists don't render every card up front.
 // Phones show two narrow columns, so a smaller batch still fills the screen.
 const batchSize = () => (window.matchMedia('(max-width: 640px)').matches ? 10 : 24) // 640px = $mobile in App.scss
+
+// Saved filters come back from the browser as untrusted JSON (possibly from an older version of
+// the app), so keep only well-formed values and fall back to the defaults for the rest.
+const loadFilters = (storageKey: string | undefined): CardFilters => {
+  if (!storageKey) return DEFAULT_FILTERS
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null') as Partial<Record<keyof CardFilters, unknown>> | null
+    if (!saved || typeof saved !== 'object') return DEFAULT_FILTERS
+    return {
+      search: typeof saved.search === 'string' ? saved.search : DEFAULT_FILTERS.search,
+      grades: Array.isArray(saved.grades) && saved.grades.every((g) => typeof g === 'number') ? saved.grades : DEFAULT_FILTERS.grades,
+      grader: GRADERS.find((grader) => grader === saved.grader) ?? DEFAULT_FILTERS.grader,
+      graded: saved.graded === 'graded' || saved.graded === 'ungraded' ? saved.graded : DEFAULT_FILTERS.graded,
+      sort: SORT_OPTIONS.find((option) => option.key === saved.sort)?.key ?? DEFAULT_FILTERS.sort,
+    }
+  } catch {
+    // Storage can be unavailable (private browsing, blocked site data).
+    return DEFAULT_FILTERS
+  }
+}
+
+const saveFilters = (storageKey: string | undefined, filters: CardFilters) => {
+  if (!storageKey) return
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(filters))
+  } catch {
+    // Not remembering filters is fine; the list still works.
+  }
+}
 
 type CardListProps = {
   cards: Card[]
@@ -22,10 +51,12 @@ type CardListProps = {
   title?: string
   /** Shows an Add button beside the filter toggle on desktop (phones use the tab bar's Add). */
   onAdd?: () => void
+  /** Local storage key that remembers the filters across visits; without one they reset each time. */
+  storageKey?: string
 }
 
-export function CardList({ cards, onOpen, emptyState, title, onAdd }: CardListProps) {
-  const [filters, setFiltersState] = useState(DEFAULT_FILTERS)
+export function CardList({ cards, onOpen, emptyState, title, onAdd, storageKey }: CardListProps) {
+  const [filters, setFiltersState] = useState(() => loadFilters(storageKey))
   const [filtersOpen, setFiltersOpen] = useState(!title)
   const [batch] = useState(batchSize)
   const [shownCount, setShownCount] = useState(batch)
@@ -35,6 +66,7 @@ export function CardList({ cards, onOpen, emptyState, title, onAdd }: CardListPr
   const setFilters = (next: typeof filters) => {
     setFiltersState(next)
     setShownCount(batch)
+    saveFilters(storageKey, next)
   }
 
   // Load the next batch when the end of the grid comes within a screen of the viewport.
@@ -65,14 +97,12 @@ export function CardList({ cards, onOpen, emptyState, title, onAdd }: CardListPr
     cards.map((card) => card.grade),
     (a, b) => b - a
   )
-  const sports = uniqueSorted(
-    cards.map((card) => card.sport),
-    (a, b) => a.localeCompare(b)
-  )
+  // Only graders that appear in this list, in the app's standard order.
+  const graders = GRADERS.filter((grader) => cards.some((card) => card.grader === grader))
 
   // Flags the toggle while hidden filters are still narrowing the list (sort order doesn't count).
   const filtering =
-    filters.search !== '' || filters.grades.length > 0 || filters.sport !== '' || filters.graded !== 'all'
+    filters.search !== '' || filters.grades.length > 0 || filters.grader !== '' || filters.graded !== 'all'
 
   return (
     <div className="card-list">
@@ -97,7 +127,7 @@ export function CardList({ cards, onOpen, emptyState, title, onAdd }: CardListPr
           </button>
         </div>
       )}
-      {filtersOpen && <CardFiltersBar filters={filters} onChange={setFilters} grades={grades} sports={sports} />}
+      {filtersOpen && <CardFiltersBar filters={filters} onChange={setFilters} grades={grades} graders={graders} />}
       <p className="card-list__count">
         {visible.length === cards.length ? '' : `${visible.length} of `}
         {cards.length} {cards.length === 1 ? 'card' : 'cards'}

@@ -24,6 +24,7 @@ type CardRow = {
   user_id: string
   list: CardList
   is_graded: number
+  grader: Grader | null
   cert_number: string | null
   grade: number | null
   grade_label: string | null
@@ -43,6 +44,21 @@ type CardRow = {
 }
 
 type CardList = 'collection' | 'wishlist'
+
+const GRADERS = ['PSA', 'BGS', 'SGC', 'TAG'] as const
+type Grader = (typeof GRADERS)[number]
+
+// Accepts the short names and the full company names the AI sometimes reads off a label.
+const normalizeGrader = (value: unknown): Grader | null => {
+  if (typeof value !== 'string') return null
+  const name = value.trim().toUpperCase()
+  if (GRADERS.includes(name as Grader)) return name as Grader
+  if (/BECKETT/.test(name)) return 'BGS'
+  if (/SPORTSCARD GUARANTY/.test(name)) return 'SGC'
+  if (/TECHNICAL AUTHENTICATION/.test(name)) return 'TAG'
+  if (/PROFESSIONAL SPORTS AUTHENTICATOR/.test(name)) return 'PSA'
+  return null
+}
 
 class HttpError extends Error {
   constructor(
@@ -86,6 +102,7 @@ const rowToCard = (row: CardRow) => ({
   id: row.id,
   list: row.list,
   isGraded: row.is_graded === 1,
+  grader: row.grader,
   certNumber: row.cert_number,
   grade: row.grade,
   gradeLabel: row.grade_label,
@@ -323,9 +340,9 @@ const MAX_IDENTIFY_IMAGE_CHARS = 4 * 1024 * 1024 // base64 data URL length
 
 const IDENTIFY_PROMPT = `You identify sports trading cards from photos. The photos show the front and/or back of one card, either raw or sealed in a grading slab.
 
-Read printed text exactly as it appears. When a grading label is visible (e.g. a PSA slab's label), it is the most reliable source for year, set, card number, player, grade and cert number, so prefer it over the card itself. Otherwise use the card front and back (the back usually has the card number, set name and copyright year).
+Read printed text exactly as it appears. When a grading label is visible (a PSA, BGS/Beckett, SGC or TAG slab's label), it is the most reliable source for year, set, card number, player, grade and cert number, so prefer it over the card itself. Otherwise use the card front and back (the back usually has the card number, set name and copyright year).
 
-"brand" is the full product/set name including the manufacturer, exactly as on the label or card back: e.g. "Panini Donruss Optic", "Topps Chrome", "Upper Deck Young Guns". Never shorten it to just the manufacturer ("Panini", "Topps").
+"brand" is the full product/set name including the manufacturer, exactly as on the label or card back: e.g. "Panini Donruss Optic", "Topps Chrome", "Upper Deck Young Guns". Never shorten it to just the manufacturer ("Panini", "Topps"). Leave out the card's own year, which goes in "year": a 2018 card is year "2018" and brand "Panini Donruss Optic", not "2018 Panini Donruss Optic". Keep a year that is part of the set's name and differs from the card's year, e.g. a 2016 card from "Donruss Panini 1987 Classic" keeps "1987".
 
 Use null for anything that isn't visible or that you can't determine confidently. Never guess a cert number or card number. "variety" is the parallel/insert/subset name if any (e.g. "Rated Rookie", "Silver Prizm", "Refractor"), else null. "sport" is a single word like Baseball, Basketball, Football, Hockey or Soccer.`
 
@@ -342,7 +359,7 @@ const IDENTIFY_SCHEMA = {
     variety: { type: ['string', 'null'] },
     sport: { type: ['string', 'null'] },
     isGraded: { type: 'boolean', description: 'True if the card is in a grading slab' },
-    grader: { type: ['string', 'null'], description: 'Grading company, e.g. "PSA"' },
+    grader: { type: ['string', 'null'], description: 'Grading company: "PSA", "BGS" (Beckett), "SGC" or "TAG"' },
     grade: { type: ['number', 'null'], description: 'Numeric grade, e.g. 9 or 8.5' },
     gradeLabel: { type: ['string', 'null'], description: 'Grade wording on the label, e.g. "MINT 9"' },
     certNumber: { type: ['string', 'null'], description: 'Cert number from the label, digits only' },
@@ -357,7 +374,7 @@ type IdentifiedCard = {
   variety: string | null
   sport: string | null
   isGraded: boolean
-  grader: string | null
+  grader: Grader | null
   grade: number | null
   gradeLabel: string | null
   certNumber: string | null
@@ -365,8 +382,23 @@ type IdentifiedCard = {
 
 // Models sometimes drop the number ("MINT" for "MINT 9") or echo the grader ("PSA").
 const gradeLabelWithNumber = (label: string | null, grade: unknown): string | null => {
-  if (!label || /^(psa|bgs|sgc|cgc)$/i.test(label)) return typeof grade === 'number' ? null : label
+  if (!label || /^(psa|bgs|sgc|tag|cgc)$/i.test(label)) return typeof grade === 'number' ? null : label
   return typeof grade === 'number' && !/\d/.test(label) ? `${label} ${grade}` : label
+}
+
+// A year or season as printed on cards and labels: "2016", "2018-19", "2018/2019".
+const YEAR_TOKEN = /\b(\d{4})(?:[-/](?:\d{4}|\d{2}))?\b/g
+
+// Drops the card's own year from the set name ("2016 Donruss" -> "Donruss") but keeps any other
+// year that is part of the name, e.g. the 1987 in a 2016 card's "Donruss Panini 1987 Classic".
+const brandWithoutYear = (brand: string | null, year: string | null): string | null => {
+  const cardYear = year?.match(/\d{4}/)?.[0]
+  if (!brand || !cardYear) return brand
+  const trimmed = brand
+    .replace(YEAR_TOKEN, (token, first: string) => (first === cardYear ? '' : token))
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  return trimmed || null
 }
 
 const ALL_CAPS = /^[^a-z]*[A-Z][^a-z]*$/
@@ -376,17 +408,18 @@ const titleCase = (value: string) => value.toLowerCase().replace(/(^|[\s'-])(\p{
 const cleanIdentified = (card: IdentifiedCard): IdentifiedCard => {
   const str = (value: unknown, max = 200) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null)
   const player = str(card.player)
+  const year = str(card.year, 20)
   const certNumber = str(card.certNumber)?.replace(/\D/g, '') || null
   return {
     // Labels are printed in capitals; keep suffixes like "II" upper-case.
     player: player && ALL_CAPS.test(player) ? titleCase(player).replace(/\b(Ii|Iii|Iv)\b/g, (s) => s.toUpperCase()) : player,
-    year: str(card.year, 20),
-    brand: str(card.brand),
+    year,
+    brand: brandWithoutYear(str(card.brand), year),
     cardNumber: str(card.cardNumber, 30)?.replace(/^#\s*/, '') ?? null,
     variety: str(card.variety),
     sport: str(card.sport, 50),
     isGraded: card.isGraded === true,
-    grader: str(card.grader, 30),
+    grader: normalizeGrader(card.grader),
     grade: typeof card.grade === 'number' && Number.isFinite(card.grade) ? card.grade : null,
     gradeLabel: gradeLabelWithNumber(str(card.gradeLabel, 50), card.grade),
     certNumber: certNumber && certNumber.length >= 5 ? certNumber : null,
@@ -444,6 +477,7 @@ const parseCardInput = (body: Record<string, unknown>): CardFields => {
   return {
     list,
     is_graded: body.isGraded === false ? 0 : 1,
+    grader: body.isGraded === false ? null : normalizeGrader(body.grader),
     cert_number: certNumber,
     grade: num(body.grade),
     grade_label: text(body.gradeLabel, 50),
@@ -480,9 +514,10 @@ const getOwnCard = async (id: string, userId: string, env: Env): Promise<CardRow
 const assertCertNotDuplicate = async (fields: CardFields, userId: string, env: Env, excludeId: string | null) => {
   if (!fields.cert_number) return
   const existing = await env.DB.prepare(
-    'SELECT id FROM cards WHERE user_id = ? AND list = ? AND cert_number = ? AND id IS NOT ?'
+    // Cert numbers are only unique within one grading company.
+    'SELECT id FROM cards WHERE user_id = ? AND list = ? AND cert_number = ? AND grader IS ? AND id IS NOT ?'
   )
-    .bind(userId, fields.list, fields.cert_number, excludeId)
+    .bind(userId, fields.list, fields.cert_number, fields.grader, excludeId)
     .first()
   if (existing) throw new HttpError(409, `Cert #${fields.cert_number} is already in your ${fields.list}`)
 }

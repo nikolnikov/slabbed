@@ -12,9 +12,13 @@ export type Profile = {
   avatarImage: string | null
 }
 
+export type Grader = 'PSA' | 'BGS' | 'SGC' | 'TAG'
+
 export type CardFields = {
   list: CardList
   isGraded: boolean
+  /** Grading company; null for raw cards or when it isn't known. */
+  grader: Grader | null
   certNumber: string | null
   grade: number | null
   gradeLabel: string | null
@@ -63,7 +67,7 @@ export type IdentifiedCard = {
   variety: string | null
   sport: string | null
   isGraded: boolean
-  grader: string | null
+  grader: Grader | null
   grade: number | null
   gradeLabel: string | null
   certNumber: string | null
@@ -85,7 +89,8 @@ export type SortKey = 'recent' | 'grade' | 'year' | 'player'
 export type CardFilters = {
   search: string
   grades: number[]
-  sport: string
+  /** Grading company, or '' for any. */
+  grader: Grader | ''
   graded: GradedFilter
   sort: SortKey
 }

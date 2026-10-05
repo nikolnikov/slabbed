@@ -792,6 +792,21 @@ select.field__input {
     color: $color-muted;
   }
 
+  // Grading companies other than PSA (red, or gold for a 10).
+  &--bgs {
+    background: #000;
+    // A light edge keeps the black badge visible on the dark page.
+    box-shadow: inset 0 0 0 1px rgba(#fff, 0.35);
+  }
+
+  &--sgc {
+    background: #15803d;
+  }
+
+  &--tag {
+    background: #2563eb;
+  }
+
   &--inline {
     position: static;
     display: inline-block;
@@ -928,6 +943,33 @@ select.field__input {
     object-fit: contain;
     border-radius: $radius;
   }
+}
+
+// Card photo with a tap/click loupe (ZoomableImage).
+.zoomable {
+  cursor: zoom-in;
+  // Stops iOS from offering "Save image" on a long press while looking around.
+  -webkit-touch-callout: none;
+  user-select: none;
+
+  &--zoomed {
+    cursor: none;
+    // While zoomed, dragging moves the loupe instead of scrolling the page.
+    touch-action: none;
+  }
+}
+
+.loupe {
+  position: absolute;
+  z-index: 2;
+  width: 150px; // LOUPE_SIZE in ZoomableImage.tsx
+  height: 150px;
+  background-color: $color-bg;
+  background-repeat: no-repeat;
+  border: 2px solid rgba(#fff, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
 }
 
 .card-detail__flip {
@@ -1068,6 +1110,11 @@ select.field__input {
   margin-bottom: 20px;
 }
 
+.card-form__find-photo {
+  display: flex;
+  justify-content: center;
+}
+
 .card-form__row {
   display: flex;
   gap: 0.75rem;
@@ -1097,10 +1144,17 @@ select.field__input {
 
 .photo-input__label {
   @extend .field__label;
+  text-align: center;
+}
+
+// Positions the remove button over the frame.
+.photo-input__box {
+  position: relative;
 }
 
 .photo-input__frame {
   position: relative;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1123,13 +1177,39 @@ select.field__input {
     width: 2rem;
     height: 2rem;
   }
+
+  @include hover {
+    border-color: $color-muted;
+  }
+
+  // The file input is visually hidden but still focusable, so show focus on the frame.
+  &:focus-within {
+    outline: 2px solid $color-accent;
+    outline-offset: 2px;
+  }
 }
 
-.photo-input__actions {
+.photo-input__empty {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.photo-input__remove {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 2rem;
+  height: 2rem;
+  // Solid backing so it stays visible over any photo.
+  background: rgba($color-bg, 0.85);
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
 }
 
 // --- Add card ---

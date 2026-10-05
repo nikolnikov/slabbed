@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS cards (
   user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   list TEXT NOT NULL CHECK (list IN ('collection', 'wishlist')),
   is_graded INTEGER NOT NULL DEFAULT 1,
+  grader TEXT, -- 'PSA', 'BGS', 'SGC' or 'TAG'
   cert_number TEXT,
   grade REAL,
   grade_label TEXT,

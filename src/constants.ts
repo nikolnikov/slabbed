@@ -1,4 +1,7 @@
-import type { CardFilters, SortKey } from './types'
+import type { CardFilters, Grader, SortKey } from './types'
+
+/** Grading companies the app recognizes; the AI reads one off the slab label. */
+export const GRADERS: Grader[] = ['PSA', 'BGS', 'SGC', 'TAG']
 
 export const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'recent', label: 'Recently added' },
@@ -7,7 +10,7 @@ export const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'player', label: 'Player (A–Z)' },
 ]
 
-export const DEFAULT_FILTERS: CardFilters = { search: '', grades: [], sport: '', graded: 'all', sort: 'recent' }
+export const DEFAULT_FILTERS: CardFilters = { search: '', grades: [], grader: '', graded: 'all', sort: 'recent' }
 
 /** Longest edge of photos uploaded from the device, in pixels. */
 export const MAX_PHOTO_DIMENSION = 1600

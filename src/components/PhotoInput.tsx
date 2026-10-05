@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { CameraIcon, CloseIcon, UploadIcon } from '../icons'
+import { CameraIcon, CloseIcon } from '../icons'
 import type { PhotoValue } from '../types'
 import { optimizePhoto, toDecodablePhoto } from '../utils'
 
@@ -37,25 +37,25 @@ export function PhotoInput({ label, value, onChange, onOriginal }: PhotoInputPro
   return (
     <div className="photo-input">
       <span className="photo-input__label">{label}</span>
-      <div className="photo-input__frame">
-        {value ? <img src={value.src} alt={label} /> : <CameraIcon />}
-      </div>
-      <div className="photo-input__actions">
-        {/* capture opens the camera on phones; desktops fall back to a file picker */}
-        <label className="button button--icon" title="Take photo">
-          <CameraIcon />
-          <span className="visually-hidden">Take {name} photo</span>
-          <input type="file" accept="image/*" capture="environment" hidden onChange={handleFile} />
-        </label>
-        <label className="button button--icon button--ghost" title="Upload">
-          <UploadIcon />
-          <span className="visually-hidden">Upload {name} photo</span>
-          <input type="file" accept="image/*" hidden onChange={handleFile} />
+      <div className="photo-input__box">
+        {/* The whole frame picks a photo. Without `capture`, phones offer Take Photo or Photo Library
+            and desktops open the file browser. With a photo already there, it picks a replacement. */}
+        <label className="photo-input__frame" title={value ? `Replace ${name} photo` : `Add ${name} photo`}>
+          {value ? (
+            <img src={value.src} alt={label} />
+          ) : (
+            <span className="photo-input__empty">
+              <CameraIcon />
+              Add photo
+            </span>
+          )}
+          <input type="file" accept="image/*" className="visually-hidden" onChange={handleFile} />
+          <span className="visually-hidden">{value ? `Replace ${name} photo` : `Add ${name} photo`}</span>
         </label>
         {value && (
           <button
             type="button"
-            className="button button--icon button--danger"
+            className="button button--icon button--danger photo-input__remove"
             title="Remove"
             onClick={() => onChange(null)}
           >

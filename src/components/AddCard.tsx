@@ -24,6 +24,7 @@ type FormPhotos = { front?: PhotoValue; back?: PhotoValue }
 const emptyDraft = (list: CardList, certNumber: string | null = null): CardInput => ({
   list,
   isGraded: list === 'collection' || certNumber !== null,
+  grader: null,
   certNumber,
   grade: null,
   gradeLabel: null,
@@ -43,6 +44,7 @@ const emptyDraft = (list: CardList, certNumber: string | null = null): CardInput
 const identifiedToDraft = (card: IdentifiedCard, list: CardList): CardInput => ({
   ...emptyDraft(list, card.certNumber),
   isGraded: card.isGraded,
+  grader: card.grader,
   grade: card.grade,
   gradeLabel: card.gradeLabel,
   sport: card.sport,

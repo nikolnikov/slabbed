@@ -1,11 +1,12 @@
 import { SORT_OPTIONS } from '../constants'
-import type { CardFilters, GradedFilter, SortKey } from '../types'
+import type { CardFilters, GradedFilter, Grader, SortKey } from '../types'
 
 type CardFiltersBarProps = {
   filters: CardFilters
   onChange: (filters: CardFilters) => void
   grades: number[]
-  sports: string[]
+  /** Grading companies present in the list. */
+  graders: Grader[]
 }
 
 const GRADED_OPTIONS: { key: GradedFilter; label: string }[] = [
@@ -14,7 +15,7 @@ const GRADED_OPTIONS: { key: GradedFilter; label: string }[] = [
   { key: 'ungraded', label: 'Ungraded' },
 ]
 
-export function CardFiltersBar({ filters, onChange, grades, sports }: CardFiltersBarProps) {
+export function CardFiltersBar({ filters, onChange, grades, graders }: CardFiltersBarProps) {
   const update = (patch: Partial<CardFilters>) => onChange({ ...filters, ...patch })
 
   const toggleGrade = (grade: number) =>
@@ -47,11 +48,16 @@ export function CardFiltersBar({ filters, onChange, grades, sports }: CardFilter
           ))}
         </div>
 
-        <select className="field__input filters__select" value={filters.sport} onChange={(e) => update({ sport: e.target.value })} aria-label="Sport">
-          <option value="">All sports</option>
-          {sports.map((sport) => (
-            <option key={sport} value={sport}>
-              {sport}
+        <select
+          className="field__input filters__select"
+          value={filters.grader}
+          onChange={(e) => update({ grader: e.target.value as Grader | '' })}
+          aria-label="Grading service"
+        >
+          <option value="">All graders</option>
+          {graders.map((grader) => (
+            <option key={grader} value={grader}>
+              {grader}
             </option>
           ))}
         </select>

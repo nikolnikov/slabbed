@@ -1,6 +1,6 @@
 import { imageUrl } from '../api'
 import type { Card } from '../types'
-import { cardSubtitle, formatGrade } from '../utils'
+import { cardSubtitle, formatGrade, gradeBadgeClass } from '../utils'
 
 type CardTileProps = {
   card: Card
@@ -15,7 +15,7 @@ export function CardTile({ card, onOpen }: CardTileProps) {
         {front ? <img src={front} alt="" loading="lazy" decoding="async" /> : <span className="card-tile__placeholder">No photo</span>}
         {/* Wishlist cards aren't owned yet, so "Raw" says nothing about them. */}
         {(card.isGraded || card.list !== 'wishlist') && (
-          <span className={`grade-badge${card.grade === 10 ? ' grade-badge--gem' : ''}${card.isGraded ? '' : ' grade-badge--raw'}`}>
+          <span className={gradeBadgeClass(card)}>
             {formatGrade(card)}
           </span>
         )}
