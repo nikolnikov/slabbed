@@ -551,18 +551,7 @@ select.field__input {
   }
 }
 
-.form-error {
-  margin: 0;
-  color: $color-error;
-  font-size: 0.9rem;
-}
-
-.form-success {
-  margin: 0;
-  color: $color-success;
-  font-size: 0.9rem;
-}
-
+// Boxed message. The default is a heads-up (yellow); the modifiers set its tone.
 .notice {
   margin: 0 0 1rem;
   padding: 0.75rem 1rem;
@@ -570,6 +559,29 @@ select.field__input {
   border: 1px solid rgba($color-gem, 0.35);
   border-radius: $radius;
   font-size: 0.9rem;
+
+  &--error {
+    background: rgba($color-error, 0.1);
+    border-color: rgba($color-error, 0.35);
+    color: $color-error;
+  }
+
+  &--success {
+    background: rgba($color-success, 0.1);
+    border-color: rgba($color-success, 0.35);
+    color: $color-success;
+  }
+
+  &--info {
+    background: $color-surface;
+    border-color: $color-border;
+    color: $color-muted;
+  }
+
+  // Inside layouts whose gap already spaces their items.
+  &--flush {
+    margin: 0;
+  }
 }
 
 .spinner {
@@ -842,7 +854,7 @@ select.field__input {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1rem 1.25rem;
+  padding: 1rem 1.5rem;
   border-bottom: 1px solid $color-border;
 
   // The panel is full-screen on phones, so keep the title and close button below the status bar.
@@ -852,12 +864,29 @@ select.field__input {
 }
 
 .modal__title {
+  display: flex;
+  align-items: center;
+  // Lets the title shrink beside the close button so long text truncates instead of pushing it.
+  min-width: 0;
   margin: 0;
   font-size: 1.15rem;
+
+  // A badge before the title keeps its size; only the title text gives way.
+  > * {
+    flex-shrink: 0;
+  }
+
+  .modal__title-text {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .modal__body {
-  padding: 1.25rem;
+  padding: 1.5rem;
   overflow-y: auto;
 
   @include mobile {
@@ -867,7 +896,7 @@ select.field__input {
 
 .card-detail {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.2fr);
   gap: 1.5rem;
 
   @include mobile {
@@ -880,13 +909,22 @@ select.field__input {
   display: flex;
   align-items: center;
   justify-content: center;
+  // A fixed slab shape (like the tiles and the Slab crop) so the box no longer takes its height
+  // from the photo: front and back can differ slightly, which made flipping shift the page.
+  aspect-ratio: 3.125 / 5.375;
   min-height: 240px;
+  max-height: 545px;
   background: $color-surface;
   border-radius: $radius;
+  overflow: hidden;
+
+  @include mobile {
+    margin: 0 33px;
+  }
 
   img {
     width: 100%;
-    max-height: 60vh;
+    height: 100%;
     object-fit: contain;
     border-radius: $radius;
   }
@@ -894,8 +932,9 @@ select.field__input {
 
 .card-detail__flip {
   position: absolute;
-  bottom: 0.75rem;
-  right: 0.75rem;
+  bottom: 0.25rem;
+  right: auto;
+  left: auto;
 }
 
 .card-detail__no-photo {
@@ -963,11 +1002,6 @@ select.field__input {
 .photo-search__actions {
   display: flex;
   justify-content: flex-end;
-}
-
-.card-detail__subtitle {
-  margin: 0 0 1rem;
-  color: $color-muted;
 }
 
 .details {
@@ -1070,7 +1104,9 @@ select.field__input {
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 2 / 3.35;
+  // Without this, a photo narrower than the frame (a slab crop) would stretch it taller.
+  min-height: 0;
   overflow: hidden;
   background: $color-surface;
   border: 1px dashed $color-border;

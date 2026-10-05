@@ -123,7 +123,11 @@ export function SettingsTab({ profile, onSave, onLogout }: SettingsTabProps) {
           </label>
         </div>
 
-        {message && <p className={message.type === 'ok' ? 'form-success' : 'form-error'}>{message.text}</p>}
+        {message && (
+          <p className={`notice notice--${message.type === 'ok' ? 'success' : 'error'} notice--flush`} role="status">
+            {message.text}
+          </p>
+        )}
         <div className="settings-form__actions">
           <button type="submit" className="button button--primary" disabled={submitting}>
             {submitting ? 'Saving…' : 'Save'}

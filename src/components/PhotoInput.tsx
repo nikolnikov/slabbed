@@ -64,7 +64,7 @@ export function PhotoInput({ label, value, onChange, onOriginal }: PhotoInputPro
           </button>
         )}
       </div>
-      {error && <p className="form-error">{error}</p>}
+      {error && <p className="notice notice--error notice--flush" role="alert">{error}</p>}
     </div>
   )
 }

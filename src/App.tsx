@@ -152,7 +152,7 @@ function App() {
   }
 
   const renderList = (list: CardListKey) => {
-    if (loadError) return <p className="form-error">{loadError}</p>
+    if (loadError) return <p className="notice notice--error" role="alert">{loadError}</p>
     if (!cards) return <Spinner />
     const listCards = cards.filter((card) => card.list === list)
     return (

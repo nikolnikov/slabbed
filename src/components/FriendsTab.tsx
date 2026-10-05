@@ -50,7 +50,7 @@ function SharedProfile({ user, onBack }: { user: SharedUser; onBack: () => void 
         )}
       </div>
 
-      {error && <p className="form-error">{error}</p>}
+      {error && <p className="notice notice--error" role="alert">{error}</p>}
       {!cards && !error && <Spinner />}
       {cards && (
         <CardList
@@ -93,6 +93,7 @@ export function FriendsTab() {
     <section>
       <h1 className="page-title">Friends</h1>
       <p className="muted">Find collectors by name or exact email address. Only people who share their collection or wishlist show up.</p>
+      {results && results.length === 0 && <p className="notice notice--info">No collectors found.</p>}
       <input
         className="field__input"
         type="search"
@@ -102,7 +103,6 @@ export function FriendsTab() {
         autoFocus
       />
 
-      {results && results.length === 0 && <p className="muted">No collectors found.</p>}
       {results && results.length > 0 && (
         <ul className="user-list">
           {results.map((user) => (

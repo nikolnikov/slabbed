@@ -42,6 +42,12 @@ export function PhotoSearch({ initialQuery, onPick, onCancel }: PhotoSearchProps
 
   return (
     <div className="photo-search">
+      {error && (
+        <p className="notice notice--error notice--flush" role="alert">
+          {error}
+        </p>
+      )}
+      {results?.length === 0 && <p className="notice notice--info notice--flush">No photos found. Try fewer details.</p>}
       <form className="photo-search__form" onSubmit={handleSubmit}>
         <input
           className="field__input"
@@ -55,13 +61,11 @@ export function PhotoSearch({ initialQuery, onPick, onCancel }: PhotoSearchProps
       </form>
       <p className="muted photo-search__hint">Photos come from eBay listings and may show a different copy of the card.</p>
 
-      {error && <p className="form-error">{error}</p>}
       {!error && searched && results === null && (
         <div className="photo-search__status">
           <Spinner label="Searching" />
         </div>
       )}
-      {results?.length === 0 && <p className="muted">No photos found. Try fewer details.</p>}
       {results && results.length > 0 && (
         <div className="photo-search__grid">
           {results.map((result) => (

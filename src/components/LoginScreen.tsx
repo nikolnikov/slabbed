@@ -59,7 +59,7 @@ export function LoginScreen({ mode, onModeChange, onSubmit, error, submitting }:
           <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
           <span>Remember me</span>
         </label>
-        {error && <p className="form-error">{error}</p>}
+        {error && <p className="notice notice--error notice--flush" role="alert">{error}</p>}
         <button type="submit" className="button button--primary" disabled={submitting}>
           {registering ? (submitting ? 'Creating account…' : 'Create account') : submitting ? 'Signing in…' : 'Sign in'}
         </button>

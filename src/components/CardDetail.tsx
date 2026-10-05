@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ApiError, api, imageUrl } from '../api'
 import { FlipIcon } from '../icons'
 import type { Card, CardInput } from '../types'
-import { cardSubtitle, formatGrade, optimizePhoto, photoSearchQuery } from '../utils'
+import { formatGrade, optimizePhoto, photoSearchQuery } from '../utils'
 import { Modal } from './Modal'
 import { PhotoSearch } from './PhotoSearch'
 
@@ -64,19 +64,31 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
   }
 
   const details: [string, string | number | null][] = [
+    ['Player / Subject', card.player],
+    ['Year', card.year],
+    ['Brand / Set', card.brand],
+    ['Card #', card.cardNumber],
+    ['Variant', card.variety],
     // Wishlist cards aren't owned yet, so there's no grade to show.
     ['Grade', card.list === 'wishlist' ? null : card.isGraded ? card.gradeLabel ?? card.grade : 'Ungraded'],
     ['Cert #', card.certNumber],
-    ['Year', card.year],
-    ['Brand / set', card.brand],
-    ['Card #', card.cardNumber],
-    ['Variant', card.variety],
     ['PSA population', card.population],
     ['Pop. higher', card.populationHigher],
   ]
 
   return (
-    <Modal title={card.player} onClose={onClose}>
+    <Modal
+      title={card.player}
+      // Wishlist cards aren't owned yet, so only collection cards lead with their grade.
+      titleBadge={
+        card.list === 'wishlist' ? undefined : (
+          <span className={`grade-badge grade-badge--inline${card.grade === 10 ? ' grade-badge--gem' : ''}${card.isGraded ? '' : ' grade-badge--raw'}`}>
+            {formatGrade(card)}
+          </span>
+        )
+      }
+      onClose={onClose}
+    >
       {findingPhoto ? (
         <PhotoSearch initialQuery={photoSearchQuery(card)} onPick={addFoundPhoto} onCancel={() => setFindingPhoto(false)} />
       ) : (
@@ -96,20 +108,12 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
             )}
             {front && back && (
               <button type="button" className="button button--small card-detail__flip" onClick={() => setSide(side === 'front' ? 'back' : 'front')}>
-                <FlipIcon /> {side === 'front' ? 'Back' : 'Front'}
+                <FlipIcon /> Flip
               </button>
             )}
           </div>
 
           <div className="card-detail__info">
-            <p className="card-detail__subtitle">
-              {(card.isGraded || card.list !== 'wishlist') && (
-                <span className={`grade-badge grade-badge--inline${card.grade === 10 ? ' grade-badge--gem' : ''}${card.isGraded ? '' : ' grade-badge--raw'}`}>
-                  {formatGrade(card)}
-                </span>
-              )}
-              {cardSubtitle(card)}
-            </p>
             <dl className="details">
               {details
                 .filter(([, value]) => value !== null && value !== '')
@@ -122,7 +126,7 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
             </dl>
             {card.notes && <p className="card-detail__notes">{card.notes}</p>}
 
-            {error && <p className="form-error">{error}</p>}
+            {error && <p className="notice notice--error" role="alert">{error}</p>}
             {!readOnly && (
               <div className="card-detail__actions">
                 {card.list === 'wishlist' && (

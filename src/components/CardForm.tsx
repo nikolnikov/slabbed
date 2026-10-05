@@ -149,9 +149,11 @@ export function CardForm({
             <PhotoInput label="Front" value={front} onChange={setFront} />
             <PhotoInput label="Back" value={back} onChange={setBack} />
           </div>
-          <button type="button" className="link-button" onClick={() => setFindingPhoto(true)}>
-            No photo? Find one online
-          </button>
+          {!front && (
+            <button type="button" className="button button--small" onClick={() => setFindingPhoto(true)}>
+              Find a photo online
+            </button>
+          )}
         </div>
       )}
       {findingPhoto && (
@@ -224,7 +226,7 @@ export function CardForm({
         <textarea className="field__input" rows={3} {...field('notes')} />
       </label>
 
-      {error && <p className="form-error">{error}</p>}
+      {error && <p className="notice notice--error notice--flush" role="alert">{error}</p>}
       <div className="card-form__actions">
         {onCancel && (
           <button type="button" className="button button--ghost" onClick={onCancel} disabled={submitting}>

@@ -204,7 +204,7 @@ export function PhotoCropper({ label, photo, shape, onShapeChange, onDone, onCan
         </label>
         <p className="muted photo-cropper__hint">Drag and pinch to fit the {shape} inside the frame.</p>
 
-        {error && <p className="form-error">{error}</p>}
+        {error && <p className="notice notice--error notice--flush" role="alert">{error}</p>}
         <div className="card-form__actions">
           <button type="button" className="button button--ghost" disabled={busy} onClick={() => finish()}>
             Use full photo

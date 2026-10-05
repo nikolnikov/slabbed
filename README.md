@@ -46,6 +46,6 @@ blank form instead. The ZXing WASM build is fetched from jsDelivr the first time
 ## Finding photos
 
 Cards without a photo can get one from eBay listings: "Find a photo" in the card details, or
-"No photo? Find one online" in the card form. The Worker searches the eBay Browse API
+"Find a photo online" in the card form (while it has no front photo). The Worker searches the eBay Browse API
 (`/api/photo-search`) so the keys never reach the browser, and the chosen photo is pulled through
 `/api/remote-image`, re-encoded as WebP and stored in R2 like any other photo.
