@@ -70,7 +70,7 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
     ['Year', card.year],
     ['Brand / set', card.brand],
     ['Card #', card.cardNumber],
-    ['Variety', card.variety],
+    ['Variant', card.variety],
     ['PSA population', card.population],
     ['Pop. higher', card.populationHigher],
   ]

@@ -216,7 +216,7 @@ export function CardForm({
         </label>
       </div>
       <label className="field">
-        <span className="field__label">Variety / parallel</span>
+        <span className="field__label">Variant</span>
         <input className="field__input" {...field('variety')} />
       </label>
       <label className="field">
