@@ -1,0 +1,1416 @@
+$color-bg: #0e0f12;
+$color-surface: #181a20;
+$color-surface-raised: #22252d;
+$color-border: #2c303a;
+$color-text: #f4f5f7;
+$color-muted: #9aa0ac;
+$color-accent: #e3262f;
+$color-accent-hover: #f23a42;
+$color-gem: #f5c518;
+$color-success: #34d399;
+$color-error: #f87171;
+
+$radius: 0.75rem;
+$mobile: 640px;
+$tab-bar-height: 4rem;
+
+@mixin mobile {
+  @media (max-width: $mobile) {
+    @content;
+  }
+}
+
+@mixin desktop {
+  @media (min-width: $mobile + 1px) {
+    @content;
+  }
+}
+
+// Touchscreens keep hover applied after a tap until you tap elsewhere, which would override
+// the active state, so hover styles only apply to devices with a real pointer.
+@mixin hover($extra: "") {
+  @media (hover: hover) {
+    &:hover#{$extra} {
+      @content;
+    }
+  }
+}
+
+// --- Layout ---
+
+.app {
+  min-height: 100vh;
+  // Column layout so the content area can fill the space between header and tab bar.
+  display: flex;
+  flex-direction: column;
+
+  &--centered {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+  }
+}
+
+.app__header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  // The home-screen app draws under the iOS status bar (black-translucent), so clear it.
+  padding: calc(0.75rem + env(safe-area-inset-top)) 1.5rem 0.75rem;
+  // Solid rather than backdrop-filter: a filter would make the header the containing block for
+  // the mobile tab bar's position: fixed, pinning it to the header instead of the screen bottom.
+  background: $color-bg;
+  border-bottom: 1px solid $color-border;
+
+  @include mobile {
+    justify-content: center;
+    // 15px all round, plus the iOS status bar height on top.
+    padding: calc(15px + env(safe-area-inset-top)) 15px 15px;
+  }
+}
+
+.app__logo {
+  height: 2.75rem;
+  width: auto;
+}
+
+.app__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 3rem;
+
+  @include mobile {
+    // 80px bottom clears the tab bar; add the iPhone home-indicator area beneath it.
+    padding: 25px 25px calc(100px + env(safe-area-inset-bottom)) 25px;
+  }
+}
+
+.page-title {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.muted {
+  color: $color-muted;
+  font-size: 0.9rem;
+}
+
+// --- Tabs ---
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+
+  @include mobile {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    margin: 0;
+    padding: 0.35rem 0.5rem calc(0.35rem + env(safe-area-inset-bottom));
+    background: $color-surface;
+    border-top: 1px solid $color-border;
+  }
+}
+
+.tabs__tab {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.9rem;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  color: $color-muted;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+
+  svg {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  @include hover {
+    color: $color-text;
+  }
+
+  &--active {
+    background: $color-surface-raised;
+    color: $color-text;
+  }
+
+  &--add {
+    background: $color-accent;
+    color: #fff;
+    order: 3;
+
+    // Desktop adds from the list pages instead.
+    @include desktop {
+      display: none;
+    }
+
+    &.tabs__tab--active {
+      background: $color-accent-hover;
+      color: #fff;
+    }
+
+    @include hover {
+      background: $color-accent-hover;
+      color: #fff;
+    }
+  }
+
+  @include mobile {
+    flex: 1;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.4rem 0;
+    justify-content: center;
+    border-radius: $radius;
+
+    &--active {
+      background: transparent;
+      color: $color-accent;
+    }
+
+    &--add {
+      flex: 0 0 3.25rem;
+      height: 3.25rem;
+      align-self: center;
+      justify-content: center;
+      border-radius: 50%;
+      order: 0;
+
+      .tabs__label {
+        display: none;
+      }
+    }
+  }
+}
+
+// Settings shows the user's avatar instead of an icon and label.
+.tabs__tab--settings {
+  padding: 0.3rem;
+
+  @include mobile {
+    padding: 0.4rem 0;
+  }
+}
+
+.tabs__avatar {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.9rem;
+}
+
+.tabs__tab--settings.tabs__tab--active .tabs__avatar {
+  box-shadow: 0 0 0 2px $color-accent;
+}
+
+.avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  overflow: hidden;
+  background: $color-surface-raised;
+  border: 1px solid $color-border;
+  border-radius: 50%;
+  color: $color-text;
+  font-weight: 700;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &--large {
+    width: 5rem;
+    height: 5rem;
+    font-size: 2rem;
+  }
+}
+
+.tabs__label {
+  font-size: 0.9rem;
+  font-weight: 600;
+
+  @include mobile {
+    font-size: 0.7rem;
+  }
+}
+
+// --- Controls ---
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.7rem 1.1rem;
+  background: $color-surface-raised;
+  border: 1px solid $color-border;
+  border-radius: $radius;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  @include hover(":not(:disabled)") {
+    background: #2d313b;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  &--primary {
+    background: $color-accent;
+    border-color: $color-accent;
+    color: #fff;
+
+    @include hover(":not(:disabled)") {
+      background: $color-accent-hover;
+    }
+  }
+
+  &--ghost {
+    background: transparent;
+  }
+
+  &--danger {
+    background: transparent;
+    border-color: rgba($color-error, 0.5);
+    color: $color-error;
+  }
+
+  &--small {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  // Square, icon-only button; give it a .visually-hidden label for screen readers.
+  &--icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+
+    svg {
+      width: 1.2rem;
+      height: 1.2rem;
+    }
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.icon-button {
+  display: flex;
+  padding: 0.4rem;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: $color-muted;
+  cursor: pointer;
+
+  svg {
+    width: 1.3rem;
+    height: 1.3rem;
+  }
+
+  @include hover {
+    color: $color-text;
+    background: $color-surface-raised;
+  }
+}
+
+// Title on the left, filter toggle on the far right.
+.card-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+
+  .page-title {
+    margin: 0;
+    margin-right: auto;
+  }
+}
+
+// Desktop only: phones add cards from the tab bar.
+.card-list__add {
+  @include mobile {
+    display: none;
+  }
+}
+
+.card-list__filter-toggle {
+  position: relative;
+
+  &--open {
+    color: $color-accent;
+    background: $color-surface-raised;
+  }
+}
+
+.card-list__filter-dot {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: $color-accent;
+  border-radius: 50%;
+}
+
+.link-button {
+  padding: 0;
+  background: none;
+  border: none;
+  color: $color-accent-hover;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  padding: 0;
+  background: none;
+  border: none;
+  color: $color-muted;
+  cursor: pointer;
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+.field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+
+  &--narrow {
+    flex: 0 0 7rem;
+  }
+}
+
+.field__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: $color-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.field__input {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius;
+  // 16px keeps iOS Safari from zooming into focused inputs
+  font-size: 16px;
+
+  &:focus {
+    outline: none;
+    border-color: $color-accent;
+  }
+
+  &:disabled {
+    color: $color-muted;
+  }
+}
+
+textarea.field__input {
+  resize: vertical;
+}
+
+// Replaces the native arrow with a chevron matching the icon set (stroke = $color-muted).
+select.field__input {
+  appearance: none;
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa0ac' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 1rem;
+  cursor: pointer;
+}
+
+.checkbox,
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+
+  input {
+    width: 1.15rem;
+    height: 1.15rem;
+    accent-color: $color-accent;
+  }
+}
+
+.segmented {
+  display: flex;
+  margin-bottom: 1rem;
+  padding: 0.25rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius;
+
+  &--compact {
+    margin-bottom: 0;
+  }
+}
+
+.segmented__option {
+  flex: 1;
+  padding: 0.5rem 0.85rem;
+  background: transparent;
+  border: none;
+  border-radius: calc(#{$radius} - 0.25rem);
+  color: $color-muted;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &--active {
+    background: $color-surface-raised;
+    color: $color-text;
+  }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chips__label {
+  margin-right: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: $color-muted;
+  text-transform: uppercase;
+}
+
+.chip {
+  min-width: 2.5rem;
+  padding: 0.35rem 0.75rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: 999px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &--active {
+    background: $color-accent;
+    border-color: $color-accent;
+    color: #fff;
+  }
+}
+
+.form-error {
+  margin: 0;
+  color: $color-error;
+  font-size: 0.9rem;
+}
+
+.form-success {
+  margin: 0;
+  color: $color-success;
+  font-size: 0.9rem;
+}
+
+.notice {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba($color-gem, 0.1);
+  border: 1px solid rgba($color-gem, 0.35);
+  border-radius: $radius;
+  font-size: 0.9rem;
+}
+
+.spinner {
+  display: flex;
+  justify-content: center;
+  padding: 2rem;
+  color: $color-accent;
+}
+
+// A spinner standing alone on a page (e.g. while cards load) fills the space between header and
+// tab bar and centers in it, matching the full-screen loading spinner.
+.app__content > .spinner {
+  flex: 1;
+  align-items: center;
+}
+
+// A page that's loading below its heading: the heading and spinner share one grid cell, so the
+// spinner centers in the whole content area instead of the space left under the heading.
+.page--loading {
+  flex: 1;
+  display: grid;
+
+  > * {
+    grid-area: 1 / 1;
+    align-self: start;
+  }
+
+  > .spinner {
+    align-self: center;
+  }
+}
+
+.spinner__icon {
+  width: 2rem;
+  height: 2rem;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// --- Auth ---
+
+.auth-screen {
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+}
+
+.auth-screen__logo {
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: 2rem;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+
+  .button {
+    margin-top: 0.5rem;
+    padding: 0.85rem;
+  }
+}
+
+.auth-screen__switch {
+  margin-top: 1.5rem;
+  color: $color-muted;
+}
+
+// --- Card list ---
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.filters__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  @include mobile {
+    .segmented {
+      flex: 1 0 100%;
+    }
+  }
+}
+
+.filters__select {
+  flex: 1;
+  width: auto;
+  min-width: 9rem;
+}
+
+.card-list__count {
+  margin: 0 0 0.75rem;
+  color: $color-muted;
+  font-size: 0.85rem;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 1rem;
+
+  @include mobile {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+}
+
+.card-tile {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+
+  @include hover {
+    transform: translateY(-2px);
+    border-color: #474d5d;
+  }
+}
+
+.card-tile__image {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  // Slab-shaped, matching the Slab crop frame (3.125" x 5.375", see PhotoCropper.tsx).
+  aspect-ratio: 3.125 / 5.375;
+  // Without this, a photo taller than the box would stretch the box instead of fitting inside it.
+  min-height: 0;
+  background: $color-surface-raised;
+
+  // Raw cards (5:7) are wider than a slab, so they fill the width and sit vertically centered,
+  // with the image's own dark background filling the space above and below.
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: $color-bg;
+  }
+}
+
+.card-tile__placeholder {
+  color: $color-muted;
+  font-size: 0.85rem;
+}
+
+.card-tile__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.65rem 0.75rem 0.75rem;
+}
+
+.card-tile__player {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-tile__meta {
+  color: $color-muted;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grade-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  background: $color-accent;
+  border-radius: 0.4rem;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+
+  &--gem {
+    background: $color-gem;
+    color: #111;
+  }
+
+  &--raw {
+    background: $color-surface;
+    border: 1px solid $color-border;
+    color: $color-muted;
+  }
+
+  &--inline {
+    position: static;
+    display: inline-block;
+    margin-right: 0.5rem;
+  }
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  padding: 3rem 1rem;
+  color: $color-muted;
+  text-align: center;
+
+  p {
+    margin: 0;
+  }
+}
+
+// --- Modal & card detail ---
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.7);
+
+  @include mobile {
+    align-items: flex-end;
+    padding: 0;
+  }
+}
+
+.modal__panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 860px;
+  max-height: calc(100vh - 2rem);
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: 1rem;
+
+  @include mobile {
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid $color-border;
+
+  // The panel is full-screen on phones, so keep the title and close button below the status bar.
+  @include mobile {
+    padding-top: calc(1rem + env(safe-area-inset-top));
+  }
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.modal__body {
+  padding: 1.25rem;
+  overflow-y: auto;
+
+  @include mobile {
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  }
+}
+
+.card-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 1.5rem;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card-detail__media {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  background: $color-surface;
+  border-radius: $radius;
+
+  img {
+    width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    border-radius: $radius;
+  }
+}
+
+.card-detail__flip {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+}
+
+.card-detail__no-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+// --- Photo search ---
+
+.photo-search {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.photo-search__form {
+  display: flex;
+  gap: 0.5rem;
+
+  .field__input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.photo-search__hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.photo-search__status {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.photo-search__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.75rem;
+}
+
+.photo-search__result {
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  overflow: hidden;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius;
+  cursor: pointer;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  @include hover {
+    border-color: $color-accent-hover;
+  }
+}
+
+.photo-search__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.card-detail__subtitle {
+  margin: 0 0 1rem;
+  color: $color-muted;
+}
+
+.details {
+  margin: 0 0 1rem;
+}
+
+.details__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid $color-border;
+
+  dt {
+    color: $color-muted;
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 600;
+    text-align: right;
+  }
+}
+
+.card-detail__notes {
+  white-space: pre-wrap;
+}
+
+.card-detail__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+
+  // Keep every action on one line: Edit/Delete hold their size, and the wide primary action shrinks instead.
+  .button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .button--primary {
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  @include mobile {
+    justify-content: center;
+  }
+}
+
+// --- Card form ---
+
+.card-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 640px;
+}
+
+.card-form__photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 20px;
+}
+
+.card-form__row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.card-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+
+  // Stack full-width on phones with the primary action on top (it's last in the markup).
+  @include mobile {
+    flex-direction: column-reverse;
+    margin-top: 15px;
+
+    .button {
+      width: 100%;
+    }
+  }
+}
+
+.photo-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.photo-input__label {
+  @extend .field__label;
+}
+
+.photo-input__frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: $color-surface;
+  border: 1px dashed $color-border;
+  border-radius: $radius;
+  color: $color-muted;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  svg {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+
+.photo-input__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+// --- Add card ---
+
+.add-card {
+  margin: 25px auto;
+  width: 640px;
+
+  @include mobile {
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
+.add-card__options {
+  display: grid;
+  // minmax(0, 1fr) keeps columns equal even when one option's text is longer;
+  // 1fr rows make every option as tall as the tallest.
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 0.75rem;
+  margin: 4rem auto 1rem;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+
+  // The Collection/Wishlist picker shown before the add flow.
+  &--lists {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.option-card {
+  // Icon on the left spanning both text lines; title and hint stacked to its right.
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 1rem;
+  row-gap: 0.35rem;
+  align-items: center;
+  padding: 1.1rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+
+  svg {
+    grid-row: 1 / span 2;
+    width: 2.5rem;
+    height: 2.5rem;
+    color: $color-accent;
+  }
+
+  .option-card__title {
+    align-self: end;
+  }
+
+  .option-card__hint {
+    align-self: start;
+  }
+
+  // Desktop: icon centered above the title and hint, all text centered.
+  @include desktop {
+    grid-template-columns: 1fr;
+    align-content: start;
+    justify-items: center;
+    text-align: center;
+
+    svg {
+      grid-row: auto;
+      margin-bottom: 0.4rem;
+    }
+
+    .option-card__title,
+    .option-card__hint {
+      align-self: auto;
+    }
+  }
+
+  @include hover {
+    border-color: $color-accent;
+  }
+}
+
+.option-card__title {
+  font-weight: 700;
+}
+
+.option-card__hint {
+  color: $color-muted;
+  font-size: 0.85rem;
+}
+
+.add-card__busy {
+  text-align: center;
+  color: $color-muted;
+
+  p {
+    margin: 0;
+  }
+}
+
+// While scanning, fill the space between header and tab bar and center the
+// spinner in it; the title shares the grid cell so it doesn't offset it.
+.add-card--busy {
+  flex: 1;
+  display: grid;
+
+  > * {
+    grid-area: 1 / 1;
+  }
+
+  > .add-card__header {
+    align-self: start;
+  }
+
+  > .add-card__busy {
+    align-self: center;
+  }
+}
+
+.photo-cropper {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.photo-cropper__viewport {
+  position: relative;
+  height: min(60vh, 560px);
+  overflow: hidden;
+  background: #000;
+  border-radius: $radius;
+  // The viewport handles drag and pinch itself instead of scrolling or zooming the page.
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+
+  img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    max-width: none;
+  }
+}
+
+.photo-cropper__frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(#fff, 0.9);
+  border-radius: 4px;
+  // Dims the photo outside the frame.
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.photo-cropper__zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  input {
+    flex: 1;
+    accent-color: $color-accent;
+  }
+}
+
+.photo-cropper__hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+// --- Friends ---
+
+.user-list {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.user-list__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius;
+  text-align: left;
+  cursor: pointer;
+
+  @include hover {
+    border-color: $color-accent;
+  }
+}
+
+.user-list__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 2.25rem;
+  height: 2.25rem;
+  background: $color-accent;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 800;
+}
+
+.user-list__name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.user-list__shares {
+  color: $color-muted;
+  font-size: 0.8rem;
+}
+
+// --- Settings ---
+
+.settings {
+  margin: 0 auto;
+  width: 100%;
+  max-width: 480px;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings-form__avatar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.settings-form__avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+// Save and Sign out stack full-width on phones and sit side by side on desktop.
+.settings-form__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 15px;
+
+  .button {
+    width: 100%;
+  }
+
+  @include desktop {
+    flex-direction: row;
+    gap: 0.75rem;
+
+    .button {
+      flex: 1;
+    }
+  }
+}
+
+.settings-form__sharing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid $color-border;
+  border-radius: $radius;
+
+  .muted {
+    margin: 0;
+  }
+}
+
+.settings-version {
+  margin-top: 1.5rem;
+  font-size: 0.8rem;
+}
+
+.ai-identify {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  .muted {
+    margin: 0;
+  }
+}
+
+// An empty Collection/Wishlist fills the content area and centers its message in it, with the
+// page title stacked in the same grid cell so it doesn't push the message off-center.
+.list-page--empty {
+  flex: 1;
+  display: grid;
+
+  > * {
+    grid-area: 1 / 1;
+  }
+
+  > .page-title {
+    align-self: start;
+  }
+
+  > .card-list-empty {
+    align-self: center;
+  }
+}

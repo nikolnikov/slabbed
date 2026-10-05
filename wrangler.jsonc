@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "slabbed",
+  // Nicksacy@gmail.com's Account (not Cascadia Consultive)
+  "account_id": "c32fd5a5f734851d0d45ed079a7f7c29",
+  "compatibility_date": "2026-10-01",
+  "main": "worker/index.ts",
+  "routes": [{ "pattern": "app.slabbbed.com", "custom_domain": true }],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // The app has no URL routes (everything lives at /), so unknown paths get a real 404 page.
+    // That includes script files from an older deploy, which index.html's script then recovers from.
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "slabbed-db",
+      "database_id": "8f4d08d1-513b-46cd-a28d-a537ac0c33b1"
+    }
+  ],
+  "ai": { "binding": "AI" },
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "slabbbed-images"
+    }
+  ]
+}

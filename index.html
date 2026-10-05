@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0e0f12" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Slabbbed!</title>
+    <script>
+      // A page kept from before a deploy (a restored tab, say) can reference script files the new
+      // deploy no longer has. The server answers those with the app's HTML, so they fail to load and
+      // the app can't start. Reload once to get the current page; the guard prevents a reload loop.
+      ;(function () {
+        function reloadOnce() {
+          try {
+            var last = Number(sessionStorage.getItem('assetReloadAt')) || 0
+            if (Date.now() - last < 10000) return
+            sessionStorage.setItem('assetReloadAt', String(Date.now()))
+          } catch (error) {
+            return
+          }
+          location.reload()
+        }
+        // Load errors on <script>/<link> don't bubble, so listen in the capture phase.
+        addEventListener(
+          'error',
+          function (event) {
+            var source = event.target && (event.target.src || event.target.href)
+            if (typeof source === 'string' && source.indexOf('/assets/') !== -1) reloadOnce()
+          },
+          true
+        )
+        // Vite's event for a lazily loaded chunk (e.g. the barcode reader) that failed to load.
+        addEventListener('vite:preloadError', reloadOnce)
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
