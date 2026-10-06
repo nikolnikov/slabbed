@@ -22,7 +22,10 @@ const loadFilters = (storageKey: string | undefined): CardFilters => {
     if (!saved || typeof saved !== 'object') return DEFAULT_FILTERS
     return {
       search: typeof saved.search === 'string' ? saved.search : DEFAULT_FILTERS.search,
-      grades: Array.isArray(saved.grades) && saved.grades.every((g) => typeof g === 'number') ? saved.grades : DEFAULT_FILTERS.grades,
+      grades:
+        Array.isArray(saved.grades) && saved.grades.every((g) => typeof g === 'number' || g === 'raw')
+          ? saved.grades
+          : DEFAULT_FILTERS.grades,
       grader: GRADERS.find((grader) => grader === saved.grader) ?? DEFAULT_FILTERS.grader,
       graded: saved.graded === 'graded' || saved.graded === 'ungraded' ? saved.graded : DEFAULT_FILTERS.graded,
       sort: SORT_OPTIONS.find((option) => option.key === saved.sort)?.key ?? DEFAULT_FILTERS.sort,
@@ -123,6 +126,7 @@ export function CardList({ cards, onOpen, emptyState, title, onAdd, storageKey }
     cards.map((card) => card.grade),
     (a, b) => b - a
   )
+  const hasRaw = cards.some((card) => !card.isGraded)
   // Only graders that appear in this list, in the app's standard order.
   const graders = GRADERS.filter((grader) => cards.some((card) => card.grader === grader))
 
@@ -153,7 +157,7 @@ export function CardList({ cards, onOpen, emptyState, title, onAdd, storageKey }
           </button>
         </div>
       )}
-      {filtersOpen && <CardFiltersBar filters={filters} onChange={setFilters} grades={grades} graders={graders} />}
+      {filtersOpen && <CardFiltersBar filters={filters} onChange={setFilters} grades={grades} hasRaw={hasRaw} graders={graders} />}
       <p className="card-list__count">
         {visible.length === cards.length ? '' : `${visible.length} of `}
         {cards.length} {cards.length === 1 ? 'card' : 'cards'}

@@ -1,10 +1,12 @@
 import { SORT_OPTIONS } from '../constants'
-import type { CardFilters, GradedFilter, Grader, SortKey } from '../types'
+import type { CardFilters, GradeChoice, GradedFilter, Grader, SortKey } from '../types'
 
 type CardFiltersBarProps = {
   filters: CardFilters
   onChange: (filters: CardFilters) => void
   grades: number[]
+  /** Whether the list has raw (ungraded) cards, for the Raw grade chip. */
+  hasRaw: boolean
   /** Grading companies present in the list. */
   graders: Grader[]
 }
@@ -15,13 +17,16 @@ const GRADED_OPTIONS: { key: GradedFilter; label: string }[] = [
   { key: 'ungraded', label: 'Ungraded' },
 ]
 
-export function CardFiltersBar({ filters, onChange, grades, graders }: CardFiltersBarProps) {
+export function CardFiltersBar({ filters, onChange, grades, hasRaw, graders }: CardFiltersBarProps) {
   const update = (patch: Partial<CardFilters>) => onChange({ ...filters, ...patch })
 
-  const toggleGrade = (grade: number) =>
+  const toggleGrade = (grade: GradeChoice) =>
     update({
       grades: filters.grades.includes(grade) ? filters.grades.filter((g) => g !== grade) : [...filters.grades, grade],
     })
+
+  // Raw sits after the numeric grades; it can't match anything while only graded cards are shown.
+  const chips: GradeChoice[] = hasRaw && filters.graded !== 'graded' ? [...grades, 'raw'] : grades
 
   return (
     <div className="filters">
@@ -41,7 +46,7 @@ export function CardFiltersBar({ filters, onChange, grades, graders }: CardFilte
               type="button"
               className={`segmented__option${filters.graded === key ? ' segmented__option--active' : ''}`}
               aria-pressed={filters.graded === key}
-              onClick={() => update({ graded: key })}
+              onClick={() => update({ graded: key, grades: key === 'graded' ? filters.grades.filter((g) => g !== 'raw') : filters.grades })}
             >
               {label}
             </button>
@@ -76,10 +81,10 @@ export function CardFiltersBar({ filters, onChange, grades, graders }: CardFilte
         </select>
       </div>
 
-      {grades.length > 0 && filters.graded !== 'ungraded' && (
+      {chips.length > 0 && filters.graded !== 'ungraded' && (
         <div className="chips" role="group" aria-label="Grade">
           <span className="chips__label">Grade</span>
-          {grades.map((grade) => (
+          {chips.map((grade) => (
             <button
               key={grade}
               type="button"
@@ -87,7 +92,7 @@ export function CardFiltersBar({ filters, onChange, grades, graders }: CardFilte
               aria-pressed={filters.grades.includes(grade)}
               onClick={() => toggleGrade(grade)}
             >
-              {grade}
+              {grade === 'raw' ? 'Raw' : grade}
             </button>
           ))}
         </div>

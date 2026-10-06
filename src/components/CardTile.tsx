@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { imageUrl, thumbUrl } from '../api'
+import noCard from '../assets/no-card.webp'
 import type { Card } from '../types'
 import { cardSubtitle, formatGrade, gradeBadgeClass, preloadImages } from '../utils'
 
@@ -40,13 +41,14 @@ export function CardTile({ card, onOpen }: CardTileProps) {
       onClick={() => onOpen(card)}
     >
       <div className="card-tile__image">
-        {thumb ? <img src={thumb} alt="" loading="lazy" decoding="async" /> : <span className="card-tile__placeholder">No photo</span>}
-        {/* Wishlist cards aren't owned yet, so "Raw" says nothing about them. */}
-        {(card.isGraded || card.list !== 'wishlist') && (
-          <span className={gradeBadgeClass(card)}>
-            {formatGrade(card)}
-          </span>
+        {thumb ? (
+          <img src={thumb} alt="" loading="lazy" decoding="async" />
+        ) : (
+          <img className="no-card" src={noCard} alt="No photo" decoding="async" />
         )}
+        {/* Collection tiles show no grade badge (card view still does). Wishlist tiles show the grade
+            being looked for, if any. */}
+        {card.list === 'wishlist' && card.isGraded && <span className={gradeBadgeClass(card)}>{formatGrade(card)}</span>}
       </div>
       <div className="card-tile__info">
         <span className="card-tile__player">{card.player}</span>

@@ -86,9 +86,12 @@ export type PhotoValue = { kind: 'stored'; ref: string; src: string } | { kind: 
 export type GradedFilter = 'all' | 'graded' | 'ungraded'
 export type SortKey = 'recent' | 'grade' | 'year' | 'player'
 
+export type GradeChoice = number | 'raw'
+
 export type CardFilters = {
   search: string
-  grades: number[]
+  /** Grades to show; 'raw' matches ungraded cards. Empty shows every grade. */
+  grades: GradeChoice[]
   /** Grading company, or '' for any. */
   grader: Grader | ''
   graded: GradedFilter

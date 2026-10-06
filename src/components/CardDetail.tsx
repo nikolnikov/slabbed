@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiError, api, imageUrl, thumbUrl, uploadCardPhoto } from '../api'
+import noCard from '../assets/no-card.webp'
 import { FlipIcon } from '../icons'
 import type { Card, CardInput } from '../types'
 import { formatGrade, gradeBadgeClass, photoSearchQueries, preloadImages } from '../utils'
@@ -142,14 +143,17 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
               // Keyed by photo so flipping to the other side closes the loupe.
               <ZoomableImage key={shown} src={shown} alt={`${card.player} ${side}`} />
             ) : (
-              <div className="card-detail__no-photo">
-                <span className="card-tile__placeholder">{busy ? 'Adding photo…' : 'No photo'}</span>
-                {!readOnly && !busy && (
-                  <button type="button" className="button button--small" onClick={() => setFindingPhoto(true)}>
-                    Find a photo
-                  </button>
-                )}
-              </div>
+              <>
+                <img className="no-card" src={noCard} alt="No photo" />
+                <div className="card-detail__no-photo">
+                  {busy && <span className="card-tile__placeholder">Adding photo…</span>}
+                  {!readOnly && !busy && (
+                    <button type="button" className="button button--small" onClick={() => setFindingPhoto(true)}>
+                      Find a photo
+                    </button>
+                  )}
+                </div>
+              </>
             )}
             {other && <img className="card-detail__preload" src={other} alt="" aria-hidden="true" />}
             {front && back && (

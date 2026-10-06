@@ -177,7 +177,10 @@ export const filterCards = (cards: Card[], filters: CardFilters): Card[] => {
     if (filters.graded === 'graded' && !card.isGraded) return false
     if (filters.graded === 'ungraded' && card.isGraded) return false
     if (filters.grader && card.grader !== filters.grader) return false
-    if (filters.grades.length > 0 && (card.grade === null || !filters.grades.includes(card.grade))) return false
+    if (filters.grades.length > 0) {
+      const matches = card.isGraded ? card.grade !== null && filters.grades.includes(card.grade) : filters.grades.includes('raw')
+      if (!matches) return false
+    }
     if (search) {
       const haystack = [card.player, card.year, card.brand, card.variety, card.cardNumber, card.certNumber, card.notes]
         .filter(Boolean)
