@@ -6,6 +6,8 @@ export interface Env {
   SESSION_SECRET: string
   EBAY_CLIENT_ID?: string
   EBAY_CLIENT_SECRET?: string
+  /** Shared with eBay when registering the account deletion endpoint (32-80 chars). */
+  EBAY_VERIFICATION_TOKEN?: string
 }
 
 type UserRow = {
@@ -323,8 +325,11 @@ const sniffImageType = (data: ArrayBuffer): 'image/webp' | 'image/jpeg' | null =
   return null
 }
 
+// A card photo's small copy for list tiles lives beside it under this suffix.
+const THUMB_SUFFIX = '-thumb'
+
 const deleteImages = async (keys: (string | null)[], env: Env) => {
-  const toDelete = keys.filter((key): key is string => !!key)
+  const toDelete = keys.filter((key): key is string => !!key).flatMap((key) => [key, `${key}${THUMB_SUFFIX}`])
   if (toDelete.length > 0) await env.IMAGES.delete(toDelete)
 }
 
@@ -524,9 +529,49 @@ const assertCertNotDuplicate = async (fields: CardFields, userId: string, env: E
 
 // --- Routes ---
 
-type Handler = (ctx: { request: Request; env: Env; url: URL; params: string[]; secure: boolean }) => Promise<Response>
+type Handler = (ctx: {
+  request: Request
+  env: Env
+  url: URL
+  params: string[]
+  secure: boolean
+  /** For work that may finish after the response is sent (e.g. filling the edge cache). */
+  waitUntil: (promise: Promise<unknown>) => void
+}) => Promise<Response>
 
 const routes: [method: string, pattern: RegExp, handler: Handler][] = [
+  // eBay's Marketplace Account Deletion endpoint, required for production API access. eBay calls it
+  // when any eBay user deletes their account. Slabbbed never stores eBay user data (photo search only
+  // reads listings), so there is nothing to delete: notifications are just acknowledged.
+  [
+    'GET',
+    /^\/api\/ebay\/account-deletion$/,
+    async ({ env, url }) => {
+      // Ownership check when the endpoint is saved in the eBay developer portal: answer with
+      // SHA-256(challengeCode + verificationToken + endpoint URL), hex-encoded.
+      const challengeCode = url.searchParams.get('challenge_code')
+      if (!challengeCode) throw new HttpError(400, 'Missing challenge_code')
+      if (!env.EBAY_VERIFICATION_TOKEN) throw new HttpError(503, 'Account deletion endpoint is not configured')
+      // Must equal the URL entered in the portal, which eBay requires to be HTTPS.
+      const endpoint = `https://${url.host}${url.pathname}`
+      const digest = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(challengeCode + env.EBAY_VERIFICATION_TOKEN + endpoint)
+      )
+      const challengeResponse = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+      return jsonResponse({ challengeResponse })
+    },
+  ],
+  [
+    'POST',
+    /^\/api\/ebay\/account-deletion$/,
+    async ({ request }) => {
+      // eBay resends anything not acknowledged promptly, so reply 204 straight away.
+      const { notification } = (await request.json().catch(() => ({}))) as { notification?: { notificationId?: string } }
+      console.log('eBay account deletion notification acknowledged', notification?.notificationId ?? '(no id)')
+      return new Response(null, { status: 204 })
+    },
+  ],
   [
     'POST',
     /^\/api\/register$/,
@@ -714,9 +759,25 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     },
   ],
   [
+    'POST',
+    /^\/api\/images\/([\w-]+\/[\w-]+)\/thumb$/,
+    async ({ request, env, params: [key] }) => {
+      // Stores the small copy of a photo this user uploaded, for list tiles.
+      const userId = await requireUserId(request, env)
+      if (!key.startsWith(`${userId}/`) || key.endsWith(THUMB_SUFFIX)) throw new HttpError(400, 'Invalid image reference')
+      if (!(await env.IMAGES.head(key))) throw new HttpError(404, 'Image not found')
+      const data = await request.arrayBuffer()
+      if (data.byteLength > MAX_IMAGE_BYTES) throw new HttpError(400, 'Image is too large')
+      const contentType = sniffImageType(data)
+      if (!contentType) throw new HttpError(400, 'Upload must be a WebP or JPEG image')
+      await env.IMAGES.put(`${key}${THUMB_SUFFIX}`, data, { httpMetadata: { contentType } })
+      return new Response(null, { status: 204 })
+    },
+  ],
+  [
     'GET',
     /^\/api\/images\/([\w-]+\/[\w-]+)$/,
-    async ({ request, env, params: [key] }) => {
+    async ({ request, env, params: [key], waitUntil }) => {
       const userId = await requireUserId(request, env)
       const ownerId = key.split('/')[0]
       if (ownerId !== userId) {
@@ -728,15 +789,38 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
         if (!owner) throw new HttpError(404, 'Image not found')
       }
 
-      const object = await env.IMAGES.get(key)
-      if (!object) throw new HttpError(404, 'Image not found')
-      return new Response(object.body, {
-        headers: {
-          'Content-Type': object.httpMetadata?.contentType ?? 'image/jpeg',
-          // Keys are never reused, so the bytes behind one never change.
-          'Cache-Control': 'private, max-age=31536000, immutable',
-        },
-      })
+      // Photos never change once stored, so after the access check above they're served from
+      // Cloudflare's edge cache when possible, skipping the R2 read. The browser copy is private.
+      const edgeKey = new Request(`https://image-cache.slabbbed.internal/${key}`)
+      let stored = await caches.default.match(edgeKey)
+      let fallback = false
+      if (!stored) {
+        let object = await env.IMAGES.get(key)
+        // A photo without a thumbnail yet serves the full image under the thumbnail's URL, cached
+        // briefly so the real thumbnail is picked up once it exists.
+        fallback = !object && key.endsWith(THUMB_SUFFIX)
+        if (fallback) object = await env.IMAGES.get(key.slice(0, -THUMB_SUFFIX.length))
+        if (!object) throw new HttpError(404, 'Image not found')
+        stored = new Response(object.body, {
+          headers: {
+            'Content-Type': object.httpMetadata?.contentType ?? 'image/jpeg',
+            ETag: object.httpEtag,
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          },
+        })
+        if (!fallback) waitUntil(caches.default.put(edgeKey, stored.clone()))
+      }
+
+      const etag = stored.headers.get('ETag')
+      const headers = {
+        'Content-Type': stored.headers.get('Content-Type') ?? 'image/jpeg',
+        ...(etag ? { ETag: etag } : {}),
+        // Keys are never reused, so the bytes behind one never change.
+        'Cache-Control': fallback ? 'private, max-age=300' : 'private, max-age=31536000, immutable',
+      }
+      // A browser rechecking its copy (a hard refresh, Safari's reload) gets a tiny "unchanged" reply.
+      if (etag && request.headers.get('If-None-Match') === etag) return new Response(null, { status: 304, headers })
+      return new Response(stored.body, { headers })
     },
   ],
   [
@@ -860,7 +944,7 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
 ]
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request)
 
@@ -869,7 +953,7 @@ export default {
       for (const [method, pattern, handler] of routes) {
         const match = url.pathname.match(pattern)
         if (match && request.method === method) {
-          return await handler({ request, env, url, params: match.slice(1), secure })
+          return await handler({ request, env, url, params: match.slice(1), secure, waitUntil: (promise) => ctx.waitUntil(promise) })
         }
       }
       return jsonResponse({ error: 'Not found' }, 404)

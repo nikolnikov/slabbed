@@ -30,3 +30,28 @@ textarea {
   font: inherit;
   color: inherit;
 }
+
+// On touch screens a long press would select text or open the copy/save menu, which gets in the
+// way of dragging (e.g. the crop screen's zoom slider). Fields stay editable and selectable.
+@media (hover: none) and (pointer: coarse) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+
+  // Sliders track the finger themselves; no long-press menu or text selection on them.
+  input[type='range'] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}

@@ -55,7 +55,7 @@ export function PhotoInput({ label, value, onChange, onOriginal }: PhotoInputPro
         {value && (
           <button
             type="button"
-            className="button button--icon button--danger photo-input__remove"
+            className="button button--icon button--danger photo-remove"
             title="Remove"
             onClick={() => onChange(null)}
           >

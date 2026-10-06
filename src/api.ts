@@ -1,4 +1,6 @@
+import { THUMB_DIMENSION } from './constants'
 import type { Card, CardInput, IdentifiedCard, PhotoResult, Profile, SharedUser } from './types'
+import { optimizePhoto } from './utils'
 
 export class ApiError extends Error {
   status: number
@@ -39,6 +41,8 @@ export const api = {
 
   uploadImage: (blob: Blob) =>
     request<{ key: string }>('/api/images', { method: 'POST', body: blob, headers: { 'Content-Type': blob.type } }),
+  uploadThumbnail: (key: string, blob: Blob) =>
+    request<unknown>(`/api/images/${key}/thumb`, { method: 'POST', body: blob, headers: { 'Content-Type': blob.type } }),
   /** Photos as data URLs (front first). */
   identifyCard: (images: string[]) =>
     request<{ card: IdentifiedCard; model: string }>('/api/identify', json('POST', { images })),
@@ -56,3 +60,18 @@ export const api = {
 }
 
 export const imageUrl = (key: string | null): string | null => (key ? `/api/images/${key}` : null)
+
+/** The small copy of a card photo for list tiles (the server falls back to the full photo). */
+export const thumbUrl = (key: string | null): string | null => (key ? `/api/images/${key}-thumb` : null)
+
+/** Uploads a card photo plus its small copy for tiles, and returns the photo's key. */
+export const uploadCardPhoto = async (photo: Blob): Promise<string> => {
+  const { key } = await api.uploadImage(photo)
+  try {
+    await api.uploadThumbnail(key, await optimizePhoto(photo, THUMB_DIMENSION))
+  } catch (error) {
+    // Tiles fall back to the full photo, so a missing thumbnail only costs speed.
+    console.warn('Thumbnail upload failed', error)
+  }
+  return key
+}

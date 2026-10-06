@@ -1,3 +1,4 @@
 SESSION_SECRET=any-long-random-string
 EBAY_CLIENT_ID=your-ebay-app-id
 EBAY_CLIENT_SECRET=your-ebay-cert-id
+EBAY_VERIFICATION_TOKEN=any-32-to-80-character-token-of-letters-digits-_-

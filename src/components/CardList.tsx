@@ -3,9 +3,11 @@ import type { ReactNode } from 'react'
 import { DEFAULT_FILTERS, GRADERS, SORT_OPTIONS } from '../constants'
 import { FilterIcon, PlusIcon } from '../icons'
 import type { Card, CardFilters } from '../types'
-import { filterCards, uniqueSorted } from '../utils'
+import { thumbUrl } from '../api'
+import { filterCards, preloadImages, uniqueSorted } from '../utils'
 import { CardFiltersBar } from './CardFiltersBar'
 import { CardTile } from './CardTile'
+import { Spinner } from './Spinner'
 
 // Tiles are rendered in batches as you scroll, so big lists don't render every card up front.
 // Phones show two narrow columns, so a smaller batch still fills the screen.
@@ -60,7 +62,32 @@ export function CardList({ cards, onOpen, emptyState, title, onAdd, storageKey }
   const [filtersOpen, setFiltersOpen] = useState(!title)
   const [batch] = useState(batchSize)
   const [shownCount, setShownCount] = useState(batch)
+  // Cards whose tile photo has been downloaded (or that have none). Photos are downloaded before
+  // their tiles are shown, so each batch appears complete instead of filling in one image at a time.
+  const [loaded, setLoaded] = useState<ReadonlySet<string>>(() => new Set())
   const sentinelRef = useRef<HTMLDivElement>(null)
+
+  const visible = filterCards(cards, filters)
+  const batchCards = visible.slice(0, shownCount)
+  // Tiles show in order: everything up to the first card still loading, then a spinner.
+  const firstPending = batchCards.findIndex((card) => !loaded.has(card.id))
+  const ready = firstPending === -1 ? batchCards : batchCards.slice(0, firstPending)
+  const pending = firstPending === -1 ? [] : batchCards.slice(firstPending)
+  // One line per waiting card: "id url" (url empty when it has no photo).
+  const pendingKey = pending.map((card) => `${card.id} ${thumbUrl(card.frontImage) ?? ''}`).join('\n')
+  const loading = pending.length > 0
+
+  useEffect(() => {
+    if (!pendingKey) return
+    let current = true
+    const entries = pendingKey.split('\n').map((line) => line.split(' '))
+    preloadImages(entries.map(([, url]) => url).filter(Boolean)).then(() => {
+      if (current) setLoaded((previous) => new Set([...previous, ...entries.map(([id]) => id)]))
+    })
+    return () => {
+      current = false
+    }
+  }, [pendingKey])
 
   // A new filter shows a different list, so start again from the first batch.
   const setFilters = (next: typeof filters) => {
@@ -81,7 +108,7 @@ export function CardList({ cards, onOpen, emptyState, title, onAdd, storageKey }
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [shownCount, filters, cards.length, batch])
+  }, [shownCount, filters, cards.length, batch, loading])
 
   if (cards.length === 0) {
     return (
@@ -92,7 +119,6 @@ export function CardList({ cards, onOpen, emptyState, title, onAdd, storageKey }
     )
   }
 
-  const visible = filterCards(cards, filters)
   const grades = uniqueSorted(
     cards.map((card) => card.grade),
     (a, b) => b - a
@@ -141,12 +167,16 @@ export function CardList({ cards, onOpen, emptyState, title, onAdd, storageKey }
         </div>
       ) : (
         <>
-          <div className="card-grid">
-            {visible.slice(0, shownCount).map((card) => (
-              <CardTile key={card.id} card={card} onOpen={onOpen} />
-            ))}
-          </div>
-          {shownCount < visible.length && <div ref={sentinelRef} aria-hidden="true" />}
+          {ready.length > 0 && (
+            <div className="card-grid">
+              {ready.map((card) => (
+                <CardTile key={card.id} card={card} onOpen={onOpen} />
+              ))}
+            </div>
+          )}
+          {loading && <Spinner label="Loading cards" />}
+          {/* The next batch is only requested once this one is showing. */}
+          {!loading && shownCount < visible.length && <div ref={sentinelRef} aria-hidden="true" />}
         </>
       )}
     </div>

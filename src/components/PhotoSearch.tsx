@@ -5,39 +5,58 @@ import type { PhotoResult } from '../types'
 import { Spinner } from './Spinner'
 
 type PhotoSearchProps = {
-  /** Starting search text, built from the card's details. */
-  initialQuery: string
+  /** Searches built from the card's details, most specific first; tried in order until one finds photos. */
+  queries: string[]
   /** Gets the full-size image URL of the chosen photo. */
   onPick: (imageUrl: string) => void
   onCancel: () => void
 }
 
 /** Searches eBay listings for photos of a card and lets the user pick one. */
-export function PhotoSearch({ initialQuery, onPick, onCancel }: PhotoSearchProps) {
-  const [query, setQuery] = useState(initialQuery)
-  const [searched, setSearched] = useState(initialQuery)
+export function PhotoSearch({ queries, onPick, onCancel }: PhotoSearchProps) {
+  const [query, setQuery] = useState(queries[0] ?? '')
+  // The searches to run, in order. A typed search replaces them with just itself.
+  const [pending, setPending] = useState(queries)
   const [results, setResults] = useState<PhotoResult[] | null>(null)
+  // Set when a wider search than the first one found the photos.
+  const [widened, setWidened] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!searched) return
+    if (pending.length === 0) return
     let current = true
-    api
-      .searchPhotos(searched)
-      .then(({ results }) => current && setResults(results))
-      .catch((err) => current && setError(err instanceof ApiError ? err.message : 'Photo search failed'))
+    const run = async () => {
+      try {
+        for (const [index, next] of pending.entries()) {
+          const { results } = await api.searchPhotos(next)
+          if (!current) return
+          if (results.length > 0 || index === pending.length - 1) {
+            setResults(results)
+            if (results.length > 0 && index > 0) {
+              setQuery(next)
+              setWidened(true)
+            }
+            return
+          }
+        }
+      } catch (err) {
+        if (current) setError(err instanceof ApiError ? err.message : 'Photo search failed')
+      }
+    }
+    run()
     return () => {
       current = false
     }
-  }, [searched])
+  }, [pending])
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
     const next = query.trim()
-    if (next === searched) return
+    if (!next) return
     setResults(null)
     setError(null)
-    setSearched(next)
+    setWidened(false)
+    setPending([next])
   }
 
   return (
@@ -48,6 +67,9 @@ export function PhotoSearch({ initialQuery, onPick, onCancel }: PhotoSearchProps
         </p>
       )}
       {results?.length === 0 && <p className="notice notice--info notice--flush">No photos found. Try fewer details.</p>}
+      {widened && (
+        <p className="notice notice--info notice--flush">No exact matches, so this search leaves out some of the card's details.</p>
+      )}
       <form className="photo-search__form" onSubmit={handleSubmit}>
         <input
           className="field__input"
@@ -61,7 +83,7 @@ export function PhotoSearch({ initialQuery, onPick, onCancel }: PhotoSearchProps
       </form>
       <p className="muted photo-search__hint">Photos come from eBay listings and may show a different copy of the card.</p>
 
-      {!error && searched && results === null && (
+      {!error && pending.length > 0 && results === null && (
         <div className="photo-search__status">
           <Spinner label="Searching" />
         </div>

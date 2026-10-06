@@ -28,6 +28,7 @@ npm run db:migrate:remote
 npx wrangler secret put SESSION_SECRET  # any long random string, e.g. `openssl rand -hex 32`
 npx wrangler secret put EBAY_CLIENT_ID      # production keyset from developer.ebay.com
 npx wrangler secret put EBAY_CLIENT_SECRET
+npx wrangler secret put EBAY_VERIFICATION_TOKEN # 32-80 chars, also entered in eBay's portal
 ```
 
 Then `npm run deploy`.
@@ -52,6 +53,10 @@ PSA no longer offers API access, so nothing is looked up by cert number. **Enter
 blank form instead. The ZXing WASM build is fetched from jsDelivr the first time it's used.
 
 ## Finding photos
+
+eBay requires every production app to handle Marketplace Account Deletion notifications. The Worker
+answers them at `https://app.slabbbed.com/api/ebay/account-deletion` (registered in the eBay developer
+portal with `EBAY_VERIFICATION_TOKEN`); Slabbbed stores no eBay user data, so it just acknowledges them.
 
 Cards without a photo can get one from eBay listings: "Find a photo" in the card details, or
 "Find a photo online" in the card form (while it has no front photo). The Worker searches the eBay Browse API

@@ -14,6 +14,8 @@ export const DEFAULT_FILTERS: CardFilters = { search: '', grades: [], grader: ''
 
 /** Longest edge of photos uploaded from the device, in pixels. */
 export const MAX_PHOTO_DIMENSION = 1600
+/** Longest edge of the small copy shown in list tiles (sharp on 2-3x screens). */
+export const THUMB_DIMENSION = 800
 export const WEBP_QUALITY = 0.82
 /** Only used when the browser can't encode WebP. */
 export const JPEG_QUALITY = 0.85

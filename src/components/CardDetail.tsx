@@ -1,9 +1,11 @@
-import { useState } from 'react'
-import { ApiError, api, imageUrl } from '../api'
+import { useEffect, useState } from 'react'
+import { ApiError, api, imageUrl, thumbUrl, uploadCardPhoto } from '../api'
 import { FlipIcon } from '../icons'
 import type { Card, CardInput } from '../types'
-import { formatGrade, gradeBadgeClass, optimizePhoto, photoSearchQuery } from '../utils'
+import { formatGrade, gradeBadgeClass, photoSearchQueries, preloadImages } from '../utils'
 import { Modal } from './Modal'
+import { PhotoCropper } from './PhotoCropper'
+import type { CropShape } from './PhotoCropper'
 import { PhotoSearch } from './PhotoSearch'
 import { ZoomableImage } from './ZoomableImage'
 
@@ -22,11 +24,37 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [findingPhoto, setFindingPhoto] = useState(false)
+  const [cropPhoto, setCropPhoto] = useState<Blob | null>(null)
+  const [cropShape, setCropShape] = useState<CropShape>('slab')
   const readOnly = !onUpdated
 
   const front = imageUrl(card.frontImage)
   const back = imageUrl(card.backImage)
-  const shown = side === 'back' && back ? back : (front ?? back)
+  // Full photos that have finished downloading. Until one has, its (already cached) tile
+  // thumbnail stands in, so the view opens instantly and sharpens when the full photo lands.
+  const [fullLoaded, setFullLoaded] = useState<ReadonlySet<string>>(() => new Set())
+
+  useEffect(() => {
+    let current = true
+    for (const url of [front, back]) {
+      if (!url) continue
+      preloadImages([url], 30_000).then(() => {
+        if (current) setFullLoaded((previous) => new Set(previous).add(url))
+      })
+    }
+    return () => {
+      current = false
+    }
+  }, [front, back])
+
+  const showBack = side === 'back' && back !== null
+  const shownFull = showBack ? back : (front ?? back)
+  const shownThumb = showBack ? thumbUrl(card.backImage) : front ? thumbUrl(card.frontImage) : thumbUrl(card.backImage)
+  const shown = shownFull && fullLoaded.has(shownFull) ? shownFull : shownThumb
+  // The side not on screen, loaded by a hidden image so flipping to it is instant.
+  const otherFull = showBack ? front : back
+  const otherThumb = showBack ? thumbUrl(card.frontImage) : thumbUrl(card.backImage)
+  const other = front && back ? (otherFull && fullLoaded.has(otherFull) ? otherFull : otherThumb) : null
 
   const save = async (input: CardInput) => {
     const { card: updated } = await api.updateCard(card.id, input)
@@ -47,11 +75,16 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
 
   const moveToCollection = () => run(() => save({ ...card, list: 'collection' }))
 
-  const addFoundPhoto = (url: string) => {
+  // A found photo is downloaded, then cropped (or used whole) before it's saved.
+  const downloadFoundPhoto = (url: string) => {
     setFindingPhoto(false)
+    return run(async () => setCropPhoto(await api.fetchRemoteImage(url)))
+  }
+
+  const saveCroppedPhoto = (photo: Blob) => {
+    setCropPhoto(null)
     return run(async () => {
-      const optimized = await optimizePhoto(await api.fetchRemoteImage(url))
-      const { key } = await api.uploadImage(optimized)
+      const key = await uploadCardPhoto(photo)
       await save({ ...card, frontImage: key })
     })
   }
@@ -91,7 +124,17 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
       onClose={onClose}
     >
       {findingPhoto ? (
-        <PhotoSearch initialQuery={photoSearchQuery(card)} onPick={addFoundPhoto} onCancel={() => setFindingPhoto(false)} />
+        <PhotoSearch queries={photoSearchQueries(card)} onPick={downloadFoundPhoto} onCancel={() => setFindingPhoto(false)} />
+      ) : cropPhoto ? (
+        <PhotoCropper
+          bare
+          label="front"
+          photo={cropPhoto}
+          shape={cropShape}
+          onShapeChange={setCropShape}
+          onDone={saveCroppedPhoto}
+          onCancel={() => setCropPhoto(null)}
+        />
       ) : (
         <div className="card-detail">
           <div className="card-detail__media">
@@ -108,9 +151,21 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
                 )}
               </div>
             )}
+            {other && <img className="card-detail__preload" src={other} alt="" aria-hidden="true" />}
             {front && back && (
               <button type="button" className="button button--small card-detail__flip" onClick={() => setSide(side === 'front' ? 'back' : 'front')}>
                 <FlipIcon /> Flip
+              </button>
+            )}
+            {/* Only the back is left: offer a search for a new front. */}
+            {!front && back && !readOnly && (
+              <button
+                type="button"
+                className="button button--small card-detail__find-front"
+                disabled={busy}
+                onClick={() => setFindingPhoto(true)}
+              >
+                {busy ? 'Adding photo…' : 'Find front photo'}
               </button>
             )}
           </div>
@@ -126,7 +181,14 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
                   </div>
                 ))}
             </dl>
-            {card.notes && <p className="card-detail__notes">{card.notes}</p>}
+            {card.notes && (
+              <section className="section-box card-detail__notes" aria-labelledby="card-notes-heading">
+                <h3 id="card-notes-heading" className="field__label">
+                  Notes
+                </h3>
+                <p>{card.notes}</p>
+              </section>
+            )}
 
             {error && <p className="notice notice--error" role="alert">{error}</p>}
             {!readOnly && (

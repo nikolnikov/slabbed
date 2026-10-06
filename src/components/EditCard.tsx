@@ -24,7 +24,6 @@ export function EditCard({ card, onSaved, onCancel }: EditCardProps) {
         onSave={save}
         onCancel={onCancel}
         hideListPicker
-        hidePhotos={card.list === 'wishlist'}
       />
     </section>
   )

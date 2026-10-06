@@ -972,11 +972,27 @@ select.field__input {
   pointer-events: none;
 }
 
+// The other side of the card, loaded off-screen so flipping shows it straight away.
+.card-detail__preload {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .card-detail__flip {
   position: absolute;
   bottom: 0.25rem;
   right: auto;
   left: auto;
+}
+
+.card-detail__find-front {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 3;
 }
 
 .card-detail__no-photo {
@@ -1069,7 +1085,11 @@ select.field__input {
 }
 
 .card-detail__notes {
-  white-space: pre-wrap;
+  margin-bottom: 1rem;
+
+  p {
+    white-space: pre-wrap;
+  }
 }
 
 .card-detail__actions {
@@ -1197,8 +1217,10 @@ select.field__input {
   font-size: 0.85rem;
 }
 
-.photo-input__remove {
+// Remove (×) button over a photo in the photo inputs.
+.photo-remove {
   position: absolute;
+  z-index: 3;
   top: 0.5rem;
   right: 0.5rem;
   width: 2rem;
@@ -1370,6 +1392,73 @@ select.field__input {
   pointer-events: none;
 }
 
+// Manual crop box: drag inside to move it, or drag an edge handle to resize it.
+.photo-cropper__box {
+  position: absolute;
+  border: 2px solid rgba(#fff, 0.9);
+  // Dims the photo outside the crop.
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55);
+  cursor: move;
+}
+
+// Generous touch targets along each edge, with a short bar marking the grip.
+.photo-cropper__edge {
+  position: absolute;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  }
+
+  &--top,
+  &--bottom {
+    left: 14px;
+    right: 14px;
+    height: 28px;
+    cursor: ns-resize;
+
+    &::after {
+      width: 36px;
+      height: 4px;
+    }
+  }
+
+  &--top {
+    top: -15px;
+  }
+
+  &--bottom {
+    bottom: -15px;
+  }
+
+  &--left,
+  &--right {
+    top: 14px;
+    bottom: 14px;
+    width: 28px;
+    cursor: ew-resize;
+
+    &::after {
+      width: 4px;
+      height: 36px;
+    }
+  }
+
+  &--left {
+    left: -15px;
+  }
+
+  &--right {
+    right: -15px;
+  }
+}
+
 .photo-cropper__zoom {
   display: flex;
   align-items: center;
@@ -1378,6 +1467,8 @@ select.field__input {
   input {
     flex: 1;
     accent-color: $color-accent;
+    // The slider gets every touch gesture, so dragging it never scrolls, zooms or selects.
+    touch-action: none;
   }
 }
 
@@ -1492,6 +1583,23 @@ select.field__input {
   border: 1px solid $color-border;
   border-radius: $radius;
 
+  .muted {
+    margin: 0;
+  }
+}
+
+// A bordered group with a small uppercase title, like the Sharing section above (used for notes in card view).
+.section-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid $color-border;
+  border-radius: $radius;
+
+  h3,
+  p,
   .muted {
     margin: 0;
   }

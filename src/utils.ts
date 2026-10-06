@@ -81,6 +81,33 @@ export const optimizePhoto = async (file: Blob, maxDimension = MAX_PHOTO_DIMENSI
   return jpeg
 }
 
+/**
+ * Downloads images into the browser cache so they show instantly when displayed. Resolves when
+ * all have loaded or failed, or after `timeoutMs` so a slow image never holds things up for long.
+ */
+// Images being preloaded. Holding a reference until each finishes stops the browser from
+// garbage-collecting one mid-download (which can cancel it and leave the real image to start over).
+const preloading = new Set<HTMLImageElement>()
+
+export const preloadImages = (urls: string[], timeoutMs = 10_000): Promise<void> =>
+  Promise.race([
+    Promise.all(
+      urls.map(
+        (url) =>
+          new Promise<void>((resolve) => {
+            const image = new Image()
+            preloading.add(image)
+            image.onload = image.onerror = () => {
+              preloading.delete(image)
+              resolve()
+            }
+            image.src = url
+          })
+      )
+    ).then(() => undefined),
+    new Promise<void>((resolve) => window.setTimeout(resolve, timeoutMs)),
+  ])
+
 export const blobToDataUrl = (blob: Blob): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -105,20 +132,27 @@ export const gradeBadgeClass = (card: Pick<Card, 'isGraded' | 'grader' | 'grade'
 export const cardSubtitle = (card: Pick<Card, 'year' | 'brand' | 'cardNumber'>): string =>
   [card.year, card.brand, card.cardNumber && `#${card.cardNumber}`].filter(Boolean).join(' ')
 
-/** Search text for finding listing photos, e.g. "1960 Topps Earl Averill #39 PSA 8". */
-export const photoSearchQuery = (
+/**
+ * Searches for listing photos, most specific first, e.g. "1960 Topps Earl Averill #39 PSA 8".
+ * eBay only returns listings containing every word, and sellers word titles differently, so each
+ * later search drops a detail (grade, then variant, card number and set) to widen the net.
+ */
+export const photoSearchQueries = (
   card: Pick<Card, 'year' | 'brand' | 'player' | 'cardNumber' | 'variety' | 'isGraded' | 'grader' | 'grade'>
-): string =>
-  [
-    card.year,
-    card.brand,
-    card.player,
-    card.cardNumber && `#${card.cardNumber}`,
-    card.variety,
-    card.isGraded && card.grade !== null && `${card.grader ?? ''} ${card.grade}`.trim(),
+): string[] => {
+  const grade = card.isGraded && card.grade !== null ? `${card.grader ?? ''} ${card.grade}`.trim() : null
+  const number = card.cardNumber && `#${card.cardNumber}`
+  const steps = [
+    [card.year, card.brand, card.player, number, card.variety, grade],
+    [card.year, card.brand, card.player, number, card.variety],
+    [card.year, card.brand, card.player, number],
+    [card.year, card.brand, card.player],
+    [card.year, card.player],
   ]
-    .filter(Boolean)
-    .join(' ')
+  const queries = steps.map((parts) => parts.filter(Boolean).join(' '))
+  // Steps repeat when a card lacks some details; the server needs at least 3 characters.
+  return [...new Set(queries)].filter((query) => query.length >= 3)
+}
 
 export const uniqueSorted =<T>(values: (T | null)[], compare: (a: T, b: T) => number): T[] =>
   [...new Set(values.filter((v): v is T => v !== null))].sort(compare)

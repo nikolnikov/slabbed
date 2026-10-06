@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { ApiError, api, imageUrl } from '../api'
+import { ApiError, api, imageUrl, uploadCardPhoto } from '../api'
 import { GRADERS } from '../constants'
 import type { CardInput, CardList, Grader, PhotoValue } from '../types'
-import { optimizePhoto, photoSearchQuery } from '../utils'
+import { optimizePhoto, photoSearchQueries } from '../utils'
 import { Modal } from './Modal'
+import { PhotoCropper } from './PhotoCropper'
+import type { CropShape } from './PhotoCropper'
 import { PhotoInput } from './PhotoInput'
 import { PhotoSearch } from './PhotoSearch'
 
@@ -60,11 +62,11 @@ const toValues = (card: CardInput): FormValues => ({
 /** Returns the photo's R2 key, uploading it first if needed. Every upload is WebP-optimized. */
 const uploadPhoto = async (photo: PhotoValue): Promise<string | null> => {
   if (!photo) return null
-  if (photo.kind === 'new') return (await api.uploadImage(photo.blob)).key
+  if (photo.kind === 'new') return uploadCardPhoto(photo.blob)
   if (!photo.ref.startsWith('https://')) return photo.ref
   // A photo picked from search results: pull it through the Worker and re-encode it like any other.
   const optimized = await optimizePhoto(await api.fetchRemoteImage(photo.ref))
-  return (await api.uploadImage(optimized)).key
+  return uploadCardPhoto(optimized)
 }
 
 const orNull = (value: string) => value.trim() || null
@@ -84,6 +86,10 @@ export function CardForm({
   const [back, setBack] = useState<PhotoValue>(() => initialPhotos?.back ?? refToPhoto(initial.backImage))
   const [submitting, setSubmitting] = useState(false)
   const [findingPhoto, setFindingPhoto] = useState(false)
+  // A found photo, downloaded and waiting to be cropped (or used whole).
+  const [downloading, setDownloading] = useState(false)
+  const [cropPhoto, setCropPhoto] = useState<Blob | null>(null)
+  const [cropShape, setCropShape] = useState<CropShape>('slab')
   const [error, setError] = useState<string | null>(null)
 
   const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
@@ -156,8 +162,8 @@ export function CardForm({
           </div>
           {!front && (
             <div className="card-form__find-photo">
-              <button type="button" className="button button--small" onClick={() => setFindingPhoto(true)}>
-                Find a photo online
+              <button type="button" className="button button--small" disabled={downloading} onClick={() => setFindingPhoto(true)}>
+                {downloading ? 'Downloading photo…' : 'Find a photo online'}
               </button>
             </div>
           )}
@@ -166,7 +172,7 @@ export function CardForm({
       {findingPhoto && (
         <Modal title="Find a photo" onClose={() => setFindingPhoto(false)}>
           <PhotoSearch
-            initialQuery={photoSearchQuery({
+            queries={photoSearchQueries({
               year: orNull(values.year),
               brand: orNull(values.brand),
               player: values.player.trim(),
@@ -176,13 +182,34 @@ export function CardForm({
               grader: values.grader || null,
               grade: values.grade ? Number(values.grade) : null,
             })}
-            onPick={(url) => {
-              setFront({ kind: 'stored', ref: url, src: url })
+            onPick={async (url) => {
               setFindingPhoto(false)
+              setDownloading(true)
+              setError(null)
+              try {
+                setCropPhoto(await api.fetchRemoteImage(url))
+              } catch {
+                setError("Couldn't download that photo")
+              } finally {
+                setDownloading(false)
+              }
             }}
             onCancel={() => setFindingPhoto(false)}
           />
         </Modal>
+      )}
+      {cropPhoto && (
+        <PhotoCropper
+          label="front"
+          photo={cropPhoto}
+          shape={cropShape}
+          onShapeChange={setCropShape}
+          onDone={(blob) => {
+            setFront({ kind: 'new', blob, src: URL.createObjectURL(blob) })
+            setCropPhoto(null)
+          }}
+          onCancel={() => setCropPhoto(null)}
+        />
       )}
 
       {/* Wishlist cards aren't owned yet, so they have no cert or grade. */}

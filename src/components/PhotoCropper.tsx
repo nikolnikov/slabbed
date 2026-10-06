@@ -4,19 +4,29 @@ import { optimizePhoto } from '../utils'
 import type { CropRect } from '../utils'
 import { Modal } from './Modal'
 
-export type CropShape = 'card' | 'slab'
+/** Fixed slab or card frames you move the photo under, or a free crop box with draggable edges. */
+export type CropShape = 'slab' | 'card' | 'manual'
+
+const SHAPE_LABELS: Record<CropShape, string> = { slab: 'Slab', card: 'Card', manual: 'Manual' }
 
 // Width / height. Raw cards are 2.5" x 3.5"; a PSA slab, label included, is about 3.125" x 5.375".
-const ASPECT: Record<CropShape, number> = { card: 2.5 / 3.5, slab: 3.125 / 5.375 }
+const ASPECT: Record<Exclude<CropShape, 'manual'>, number> = { card: 2.5 / 3.5, slab: 3.125 / 5.375 }
 // How much of the viewport the frame takes up, leaving a margin of photo visible around it.
 const FRAME_FILL = 0.88
 // Zoom limit, relative to the smallest zoom that still fills the frame.
 const MAX_ZOOM = 6
+// Manual mode shows the whole photo, leaving room around it for the edge handles.
+const MANUAL_FILL = 0.92
+// Smallest manual crop, in screen pixels.
+const MIN_CROP_PX = 40
 
 type Size = { width: number; height: number }
 type Point = { x: number; y: number }
 /** Photo zoom (screen px per photo px) and the offset of its center from the viewport's center. */
 type View = { scale: number } & Point
+/** Manual crop box as fractions (0-1) of the photo, so it survives the viewport resizing. */
+type Box = { x: number; y: number; w: number; h: number }
+type Edge = 'top' | 'right' | 'bottom' | 'left'
 
 type PhotoCropperProps = {
   /** e.g. "front", for the title "Crop front photo". */
@@ -28,18 +38,25 @@ type PhotoCropperProps = {
   /** Gets the cropped (or full, if skipped) photo, resized and re-encoded for upload. */
   onDone: (photo: Blob) => void
   onCancel: () => void
+  /** Renders without its own modal, for use inside another one (e.g. the card details). */
+  bare?: boolean
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
-/** Lets the user pan and pinch a photo under a card- or slab-shaped frame and crops to it. */
-export function PhotoCropper({ label, photo, shape, onShapeChange, onDone, onCancel }: PhotoCropperProps) {
+/**
+ * Crops a photo: pan and pinch it under a slab- or card-shaped frame, or (Manual) drag the edges
+ * of a crop box over the whole photo.
+ */
+export function PhotoCropper({ label, photo, shape, onShapeChange, onDone, onCancel, bare = false }: PhotoCropperProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number, Point>())
   const [src] = useState(() => URL.createObjectURL(photo))
   const [image, setImage] = useState<Size | null>(null)
   const [box, setBox] = useState<Size | null>(null)
   const [view, setView] = useState<View | null>(null)
+  const [manual, setManual] = useState<Box>({ x: 0, y: 0, w: 1, h: 1 })
+  const drag = useRef<{ edge: Edge | 'move'; x: number; y: number; start: Box } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -53,7 +70,8 @@ export function PhotoCropper({ label, photo, shape, onShapeChange, onDone, onCan
     return () => observer.disconnect()
   }, [])
 
-  const aspect = ASPECT[shape]
+  const isManual = shape === 'manual'
+  const aspect = isManual ? 1 : ASPECT[shape]
   const frame: Size | null = box && {
     width: Math.min(box.height * FRAME_FILL, (box.width * FRAME_FILL) / aspect) * aspect,
     height: Math.min(box.height * FRAME_FILL, (box.width * FRAME_FILL) / aspect),
@@ -88,6 +106,7 @@ export function PhotoCropper({ label, photo, shape, onShapeChange, onDone, onCan
   }
 
   const handlePointerDown = (event: PointerEvent) => {
+    if (isManual) return
     event.currentTarget.setPointerCapture(event.pointerId)
     pointers.current.set(event.pointerId, relativePoint(event))
   }
@@ -123,6 +142,58 @@ export function PhotoCropper({ label, photo, shape, onShapeChange, onDone, onCan
     pointers.current.delete(event.pointerId)
   }
 
+  // Manual mode: the whole photo, fitted inside the viewport.
+  const fitted =
+    image && box
+      ? (() => {
+          const scale = Math.min(box.width / image.width, box.height / image.height) * MANUAL_FILL
+          const width = image.width * scale
+          const height = image.height * scale
+          return { scale, width, height, left: (box.width - width) / 2, top: (box.height - height) / 2 }
+        })()
+      : null
+
+  // Each move is measured from where the drag started, so fast moves never lose ground.
+  const startDrag = (edge: Edge | 'move') => (event: PointerEvent) => {
+    event.stopPropagation()
+    drag.current = { edge, x: event.clientX, y: event.clientY, start: manual }
+    // Keeps the drag going when the pointer slips off the thin handle (fails only for stray pointers).
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      // The drag still works while the pointer stays over the crop box.
+    }
+  }
+
+  const handleDragMove = (event: PointerEvent) => {
+    const current = drag.current
+    if (!current || !fitted) return
+    const dx = (event.clientX - current.x) / fitted.width
+    const dy = (event.clientY - current.y) / fitted.height
+    const minW = MIN_CROP_PX / fitted.width
+    const minH = MIN_CROP_PX / fitted.height
+    const r = current.start
+    let next: Box
+    if (current.edge === 'left') {
+      const x = clamp(r.x + dx, 0, r.x + r.w - minW)
+      next = { ...r, x, w: r.w + r.x - x }
+    } else if (current.edge === 'right') {
+      next = { ...r, w: clamp(r.w + dx, minW, 1 - r.x) }
+    } else if (current.edge === 'top') {
+      const y = clamp(r.y + dy, 0, r.y + r.h - minH)
+      next = { ...r, y, h: r.h + r.y - y }
+    } else if (current.edge === 'bottom') {
+      next = { ...r, h: clamp(r.h + dy, minH, 1 - r.y) }
+    } else {
+      next = { ...r, x: clamp(r.x + dx, 0, 1 - r.w), y: clamp(r.y + dy, 0, 1 - r.h) }
+    }
+    setManual(next)
+  }
+
+  const endDrag = () => {
+    drag.current = null
+  }
+
   const finish = async (crop?: CropRect) => {
     setBusy(true)
     setError(null)
@@ -137,6 +208,9 @@ export function PhotoCropper({ label, photo, shape, onShapeChange, onDone, onCan
   // The frame sits in the viewport's center; map its edges back onto the photo's own pixels.
   const cropRect = (): CropRect | undefined => {
     if (!image || !frame) return undefined
+    if (isManual) {
+      return { x: manual.x * image.width, y: manual.y * image.height, width: manual.w * image.width, height: manual.h * image.height }
+    }
     const { scale, x, y } = current
     return {
       x: image.width / 2 + (-frame.width / 2 - x) / scale,
@@ -146,51 +220,69 @@ export function PhotoCropper({ label, photo, shape, onShapeChange, onDone, onCan
     }
   }
 
-  return (
-    <Modal title={`Crop ${label} photo`} onClose={onCancel}>
-      <div className="photo-cropper">
-        <div className="segmented segmented--compact" role="group" aria-label="Frame shape">
-          {(['card', 'slab'] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={`segmented__option${shape === option ? ' segmented__option--active' : ''}`}
-              aria-pressed={shape === option}
-              onClick={() => onShapeChange(option)}
-            >
-              {option === 'card' ? 'Card' : 'Slab'}
-            </button>
-          ))}
-        </div>
+  const imageTransform = isManual
+    ? `translate(-50%, -50%) scale(${fitted?.scale ?? 1})`
+    : `translate(-50%, -50%) translate(${current.x}px, ${current.y}px) scale(${current.scale})`
 
-        <div
-          ref={viewportRef}
-          className="photo-cropper__viewport"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-        >
-          <img
-            src={src}
-            alt={`${label} photo`}
-            draggable={false}
-            onLoad={(event) =>
-              setImage({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })
-            }
-            style={
-              image
-                ? {
-                    width: image.width,
-                    height: image.height,
-                    transform: `translate(-50%, -50%) translate(${current.x}px, ${current.y}px) scale(${current.scale})`,
-                  }
-                : { visibility: 'hidden' }
-            }
-          />
-          {frame && <div className="photo-cropper__frame" style={{ width: frame.width, height: frame.height }} />}
-        </div>
+  const content = (
+    <div className="photo-cropper">
+      <div className="segmented segmented--compact" role="group" aria-label="Crop shape">
+        {(['slab', 'card', 'manual'] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={`segmented__option${shape === option ? ' segmented__option--active' : ''}`}
+            aria-pressed={shape === option}
+            onClick={() => onShapeChange(option)}
+          >
+            {SHAPE_LABELS[option]}
+          </button>
+        ))}
+      </div>
 
+      <div
+        ref={viewportRef}
+        className="photo-cropper__viewport"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        <img
+          src={src}
+          alt={`${label} photo`}
+          draggable={false}
+          onLoad={(event) => {
+            setImage({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })
+            // Measure now too, in case the resize observer hasn't reported yet.
+            const rect = viewportRef.current?.getBoundingClientRect()
+            if (rect) setBox((current) => current ?? { width: rect.width, height: rect.height })
+          }}
+          style={image ? { width: image.width, height: image.height, transform: imageTransform } : { visibility: 'hidden' }}
+        />
+        {!isManual && frame && <div className="photo-cropper__frame" style={{ width: frame.width, height: frame.height }} />}
+        {isManual && fitted && (
+          <div
+            className="photo-cropper__box"
+            style={{
+              left: fitted.left + manual.x * fitted.width,
+              top: fitted.top + manual.y * fitted.height,
+              width: manual.w * fitted.width,
+              height: manual.h * fitted.height,
+            }}
+            onPointerDown={startDrag('move')}
+            onPointerMove={handleDragMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+          >
+            {(['top', 'right', 'bottom', 'left'] as const).map((edge) => (
+              <div key={edge} className={`photo-cropper__edge photo-cropper__edge--${edge}`} onPointerDown={startDrag(edge)} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {!isManual && (
         <label className="photo-cropper__zoom">
           <span className="muted">Zoom</span>
           <input
@@ -202,18 +294,33 @@ export function PhotoCropper({ label, photo, shape, onShapeChange, onDone, onCan
             onChange={(event) => setView(fit(zoomAt(current, { x: 0, y: 0 }, (Number(event.target.value) * minScale) / current.scale)))}
           />
         </label>
-        <p className="muted photo-cropper__hint">Drag and pinch to fit the {shape} inside the frame.</p>
+      )}
+      <p className="muted photo-cropper__hint">
+        {isManual ? 'Drag the edges to crop, or drag inside the box to move it.' : `Drag and pinch to fit the ${shape} inside the frame.`}
+      </p>
 
-        {error && <p className="notice notice--error notice--flush" role="alert">{error}</p>}
-        <div className="card-form__actions">
-          <button type="button" className="button button--ghost" disabled={busy} onClick={() => finish()}>
-            Use full photo
+      {error && <p className="notice notice--error notice--flush" role="alert">{error}</p>}
+      <div className="card-form__actions">
+        <button type="button" className="button button--ghost" disabled={busy} onClick={() => finish()}>
+          Use full photo
+        </button>
+        {bare && (
+          <button type="button" className="button button--ghost" disabled={busy} onClick={onCancel}>
+            Cancel
           </button>
-          <button type="button" className="button button--primary" disabled={busy || !image} onClick={() => finish(cropRect())}>
-            {busy ? 'Cropping…' : 'Crop'}
-          </button>
-        </div>
+        )}
+        <button type="button" className="button button--primary" disabled={busy || !image} onClick={() => finish(cropRect())}>
+          {busy ? 'Cropping…' : 'Crop'}
+        </button>
       </div>
+    </div>
+  )
+
+  return bare ? (
+    content
+  ) : (
+    <Modal title={`Crop ${label} photo`} onClose={onCancel}>
+      {content}
     </Modal>
   )
 }
