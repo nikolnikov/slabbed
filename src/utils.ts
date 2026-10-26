@@ -174,8 +174,11 @@ const NAME_WORD = /^["“”‘’']?\p{L}[\p{L}'’.-]*["“”‘’']?$/u
 /**
  * What a subject sorts under: the last name for a plain person's name ("Ken Griffey Jr." ->
  * "Griffey"), otherwise the whole name from its first letter ("Clay VS. Liston" sorts under C).
+ * Subjects joined with "/" sort by the first one.
  */
-const sortName = (name: string): string => {
+const sortName = (fullName: string): string => {
+  // Several subjects split by "/" ("B. Maxwell/E. Thomas...") file under the first one.
+  const name = fullName.split('/')[0]
   // A multi-word nickname in double quotes (Ed "Too Tall" Jones) doesn't count towards the name.
   const words = nameWords(name.replace(/["“”][^"“”]*\s[^"“”]*["“”]/g, ' '))
   const isPersonName = !NOT_ONE_PERSON.test(name) && words.length <= 3 && words.every((word) => NAME_WORD.test(word))
