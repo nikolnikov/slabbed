@@ -107,7 +107,7 @@ export function CardDetail({ card, onClose, onUpdated, onDeleted, onEdit }: Card
     // Wishlist cards aren't owned yet, so there's no grade to show.
     ['Grade', card.list === 'wishlist' ? null : card.isGraded ? card.gradeLabel ?? card.grade : 'Ungraded'],
     ['Cert #', card.certNumber],
-    ['PSA population', card.population],
+    ['Pop', card.population],
     ['Pop. higher', card.populationHigher],
   ]
 

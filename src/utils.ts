@@ -159,17 +159,43 @@ export const uniqueSorted =<T>(values: (T | null)[], compare: (a: T, b: T) => nu
 
 const NAME_SUFFIX = /^(jr|sr|ii|iii|iv|v)\.?$/i
 
-/** "Ken Griffey Jr." -> "Griffey": the last word of the name, skipping suffixes. */
-const lastName = (name: string): string => {
+/** Words of a name without trailing suffixes: "Ken Griffey Jr." -> ["Ken", "Griffey"]. */
+const nameWords = (name: string): string[] => {
   const words = name.trim().split(/\s+/)
   while (words.length > 1 && NAME_SUFFIX.test(words[words.length - 1])) words.pop()
-  return words[words.length - 1] ?? ''
+  return words
 }
 
-/** Sorts by last name, then by full name (so "Hank Aaron" and "Tommie Aaron" stay in a fixed order). */
+// Signs a subject isn't one person: matchups, several subjects, numbers, or team/set cards.
+const NOT_ONE_PERSON = /\s(vs\.?|v\.|and|with)\s|[&/+,]|\d|\b(team|leaders|checklist|series|champions?|all-stars?)\b/i
+// A name word: letters plus hyphens, apostrophes and initials' periods, optionally in quotes ("Pudge").
+const NAME_WORD = /^["“”‘’']?\p{L}[\p{L}'’.-]*["“”‘’']?$/u
+
+/**
+ * What a subject sorts under: the last name for a plain person's name ("Ken Griffey Jr." ->
+ * "Griffey"), otherwise the whole name from its first letter ("Clay VS. Liston" sorts under C).
+ */
+const sortName = (name: string): string => {
+  const words = nameWords(name)
+  const isPersonName = !NOT_ONE_PERSON.test(name) && words.length <= 3 && words.every((word) => NAME_WORD.test(word))
+  return isPersonName ? (words[words.length - 1] ?? '') : name.trim()
+}
+
+/** Sorts by last name (or whole name, see sortName), then by full name so ties stay in a fixed order. */
 const compareByLastName = (a: string, b: string) =>
-  lastName(a).localeCompare(lastName(b), undefined, { sensitivity: 'base' }) ||
+  sortName(a).localeCompare(sortName(b), undefined, { sensitivity: 'base' }) ||
   a.localeCompare(b, undefined, { sensitivity: 'base' })
+
+/** Oldest first ("2018-19" sorts as 2018); cards without a year go last. */
+const compareYears = (a: string | null, b: string | null) => {
+  if (!a || !b) return a ? -1 : b ? 1 : 0
+  return a.localeCompare(b, undefined, { numeric: true })
+}
+
+/** One player's cards: by year, then brand/set (cards without a brand last). */
+const compareSamePlayer = (a: Card, b: Card) =>
+  compareYears(a.year, b.year) ||
+  (a.brand && b.brand ? a.brand.localeCompare(b.brand, undefined, { sensitivity: 'base' }) : a.brand ? -1 : b.brand ? 1 : 0)
 
 export const filterCards = (cards: Card[], filters: CardFilters): Card[] => {
   const search = filters.search.trim().toLowerCase()
@@ -195,7 +221,7 @@ export const filterCards = (cards: Card[], filters: CardFilters): Card[] => {
     recent: (a, b) => b.createdAt.localeCompare(a.createdAt),
     grade: (a, b) => (b.grade ?? -1) - (a.grade ?? -1),
     year: (a, b) => (b.year ?? '').localeCompare(a.year ?? ''),
-    player: (a, b) => compareByLastName(a.player, b.player),
+    player: (a, b) => compareByLastName(a.player, b.player) || compareSamePlayer(a, b),
   }
   return filtered.sort(compare[filters.sort])
 }

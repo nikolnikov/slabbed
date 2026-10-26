@@ -1,5 +1,5 @@
 import { THUMB_DIMENSION } from './constants'
-import type { Card, CardInput, IdentifiedCard, PhotoResult, Profile, SharedUser } from './types'
+import type { Card, CardInput, IdentifiedCard, ListingDetails, PhotoResult, Profile, SharedUser } from './types'
 import { optimizePhoto } from './utils'
 
 export class ApiError extends Error {
@@ -43,6 +43,11 @@ export const api = {
     request<{ key: string }>('/api/images', { method: 'POST', body: blob, headers: { 'Content-Type': blob.type } }),
   uploadThumbnail: (key: string, blob: Blob) =>
     request<unknown>(`/api/images/${key}/thumb`, { method: 'POST', body: blob, headers: { 'Content-Type': blob.type } }),
+  /** Card details and photo for a pasted eBay listing link (or item number). */
+  ebayListing: (url: string) =>
+    request<{ title: string; card: ListingDetails; imageUrl: string | null }>('/api/ebay-listing', json('POST', { url })),
+  /** Card details read from an eBay listing title (wishlist card search). */
+  parseListing: (title: string) => request<{ card: IdentifiedCard }>('/api/parse-listing', json('POST', { title })),
   /** Photos as data URLs (front first). */
   identifyCard: (images: string[]) =>
     request<{ card: IdentifiedCard; model: string }>('/api/identify', json('POST', { images })),

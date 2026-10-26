@@ -273,6 +273,79 @@ type EbayItemSummary = {
 // Search results carry small thumbnails (s-l225); the same path serves up to 1600px.
 const largeEbayImage = (imageUrl: string) => imageUrl.replace(/\/s-l\d+\./, '/s-l1600.')
 
+// --- eBay listing from a pasted link (wishlist) ---
+
+// Item numbers in listing links: ebay.com/itm/123456789012 or /itm/some-title/123456789012.
+const ITEM_ID_IN_URL = /\/itm\/(?:[^/?#]+\/)?(\d{9,15})(?:[/?#]|$)/
+// Share links redirect to the listing; only eBay's own hosts are followed.
+const EBAY_LINK_HOSTS = /(^|\.)(ebay\.(com|us|to|ca|co\.uk|com\.au|de|fr|it|es))$/
+
+const ebayItemId = async (input: string): Promise<string | null> => {
+  const text = input.trim()
+  if (/^\d{9,15}$/.test(text)) return text
+  let url: URL
+  try {
+    url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`)
+  } catch {
+    return null
+  }
+  if (!EBAY_LINK_HOSTS.test(url.hostname)) return null
+  const direct = url.pathname.match(ITEM_ID_IN_URL)?.[1] ?? url.searchParams.get('item')
+  if (direct && /^\d{9,15}$/.test(direct)) return direct
+  // A short share link (e.g. ebay.us/abc123): follow its redirects, staying on eBay.
+  for (let hop = 0; hop < 3; hop++) {
+    const res = await fetch(url, { method: 'GET', redirect: 'manual', headers: OUTBOUND_HEADERS })
+    const location = res.headers.get('Location')
+    if (!location) return null
+    url = new URL(location, url)
+    if (!EBAY_LINK_HOSTS.test(url.hostname)) return null
+    const id = url.pathname.match(ITEM_ID_IN_URL)?.[1]
+    if (id) return id
+  }
+  return null
+}
+
+type EbayItem = {
+  title?: string
+  image?: { imageUrl?: string }
+  localizedAspects?: { name?: string; value?: string }[]
+}
+
+const fetchEbayItem = async (env: Env, itemId: string): Promise<EbayItem> => {
+  const params = new URLSearchParams({ legacy_item_id: itemId })
+  const res = await fetch(`${EBAY_API_BASE}/buy/browse/v1/item/get_item_by_legacy_id?${params}`, {
+    headers: { ...OUTBOUND_HEADERS, Authorization: `Bearer ${await getEbayToken(env)}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' },
+  })
+  if (res.status === 404 || res.status === 400) throw new HttpError(404, "That listing couldn't be found. It may have ended.")
+  if (res.status === 429) throw new HttpError(429, 'eBay lookup limit reached. Try again later.')
+  if (!res.ok) {
+    console.error('eBay item lookup failed', res.status, await res.text())
+    throw new HttpError(502, 'eBay lookup is unavailable right now')
+  }
+  return (await res.json()) as EbayItem
+}
+
+// Seller-entered item specifics, used to fill in whatever the title leaves out.
+const aspectsToCard = (aspects: EbayItem['localizedAspects'] = []) => {
+  const get = (...names: string[]) => {
+    const found = aspects.find((aspect) => aspect.name && names.some((name) => aspect.name!.toLowerCase() === name.toLowerCase()))
+    const value = found?.value?.trim()
+    return value && !/^(n\/?a|none|unknown|does not apply)$/i.test(value) ? value : null
+  }
+  const manufacturer = get('Manufacturer')
+  const set = get('Set')
+  // "Set" usually already names the maker ("Topps Chrome Update"); add it only when it doesn't.
+  const brand = set && manufacturer && !set.toLowerCase().includes(manufacturer.toLowerCase()) ? `${manufacturer} ${set}` : (set ?? manufacturer)
+  return {
+    player: get('Player/Athlete', 'Player', 'Athlete'),
+    year: get('Season', 'Year Manufactured', 'Year'),
+    brand,
+    cardNumber: get('Card Number')?.replace(/^#\s*/, '') ?? null,
+    variety: get('Parallel/Variety', 'Parallel', 'Variety', 'Insert Set'),
+    sport: get('Sport'),
+  }
+}
+
 const searchEbayPhotos = async (env: Env, query: string): Promise<PhotoResult[]> => {
   const params = new URLSearchParams({ q: query, category_ids: EBAY_CARD_CATEGORY, limit: '24' })
   const res = await fetch(`${EBAY_API_BASE}/buy/browse/v1/item_summary/search?${params}`, {
@@ -429,6 +502,37 @@ const cleanIdentified = (card: IdentifiedCard): IdentifiedCard => {
     gradeLabel: gradeLabelWithNumber(str(card.gradeLabel, 50), card.grade),
     certNumber: certNumber && certNumber.length >= 5 ? certNumber : null,
   }
+}
+
+const PARSE_TITLE_PROMPT = `You read eBay listing titles for sports trading cards and pull out the card's details.
+
+Titles are written by sellers: abbreviated, in any order, with extra words like "RC", "HOF", "MINT", "INVEST", "L@@K" or condition notes. Keep only facts about the card itself. "player" is the player or subject in normal capitalization (e.g. "Ken Griffey Jr."). "year" is the card's year or season exactly as written (e.g. "2018" or "1986-87"). "brand" is the manufacturer and set (e.g. "Topps Chrome", "Panini Prizm"), without the year and without the sport; a sport word ("Basketball", "Football") goes in "sport". "cardNumber" is the card number without "#". "variety" is a parallel, insert or subset (e.g. "Refractor", "Rated Rookie", "Silver Prizm"), else null; "RC" alone is not a variety. A grading company and grade in the title (e.g. "PSA 9") go in grader and grade, with isGraded true.
+
+Use null for anything the title doesn't say. Never guess a card number or year.`
+
+const runParseTitle = async (env: Env, title: string) => {
+  const run = env.AI.run as (model: string, inputs: Record<string, unknown>) => Promise<unknown>
+  const output = await run.call(env.AI, IDENTIFY_MODELS[0], {
+    messages: [
+      { role: 'system', content: PARSE_TITLE_PROMPT },
+      { role: 'user', content: `Listing title: ${title}` },
+    ],
+    response_format: {
+      type: 'json_schema',
+      json_schema: { name: 'card', schema: IDENTIFY_SCHEMA, strict: true },
+    },
+    max_completion_tokens: 1024,
+  })
+  const card = parseIdentifyOutput(output)
+  // The model sometimes skips a year that's plainly in the title; take the first one written.
+  const year = card.year ?? title.match(/\b(?:19|20)\d{2}(?:-\d{2})?\b/)?.[0] ?? null
+  // A sport word left in the set name (e.g. "Fleer Basketball") moves to the sport.
+  const sportWord = card.brand?.match(/\b(baseball|basketball|football|hockey|soccer)\b/i)?.[0]
+  const brand = sportWord ? card.brand!.replace(sportWord, '').replace(/\s{2,}/g, ' ').trim() || null : card.brand
+  const sport = card.sport ?? (sportWord ? sportWord[0].toUpperCase() + sportWord.slice(1).toLowerCase() : null)
+  // "Rookie" / "RC" describe the card, but aren't a parallel or insert.
+  const variety = card.variety && /^(rookie( card)?|rc)$/i.test(card.variety) ? null : card.variety
+  return { ...card, year, brand: brandWithoutYear(brand, year), sport, variety }
 }
 
 const runIdentify = async (env: Env, model: IdentifyModel, images: string[]) => {
@@ -851,6 +955,55 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
       const contentType = res.headers.get('Content-Type') ?? ''
       if (!res.ok || !contentType.startsWith('image/')) throw new HttpError(502, "Couldn't download that photo")
       return new Response(res.body, { headers: { 'Content-Type': contentType, 'Cache-Control': 'private, max-age=3600' } })
+    },
+  ],
+  [
+    'POST',
+    /^\/api\/ebay-listing$/,
+    async ({ request, env }) => {
+      // Card details and photo for a pasted eBay link (wishlist): the title read by the AI, with
+      // gaps filled from the seller's item specifics.
+      await requireUserId(request, env)
+      const { url } = await readJson<{ url?: unknown }>(request)
+      const itemId = typeof url === 'string' ? await ebayItemId(url.slice(0, 500)) : null
+      if (!itemId) throw new HttpError(400, "That doesn't look like an eBay listing link")
+      const item = await fetchEbayItem(env, itemId)
+      const title = item.title?.trim() ?? ''
+      const fromTitle = title ? await runParseTitle(env, title).catch(() => null) : null
+      const fromAspects = aspectsToCard(item.localizedAspects)
+      const pick = <K extends keyof typeof fromAspects>(key: K) => fromTitle?.[key] ?? fromAspects[key] ?? null
+      const year = pick('year')
+      const imageUrl = item.image?.imageUrl
+      return jsonResponse({
+        title,
+        card: {
+          player: pick('player'),
+          year,
+          brand: brandWithoutYear(pick('brand'), year),
+          cardNumber: pick('cardNumber'),
+          variety: pick('variety'),
+          sport: pick('sport'),
+        },
+        imageUrl: imageUrl && new URL(imageUrl).hostname === EBAY_IMAGE_HOST ? largeEbayImage(imageUrl) : null,
+      })
+    },
+  ],
+  [
+    'POST',
+    /^\/api\/parse-listing$/,
+    async ({ request, env }) => {
+      // Turns an eBay listing title (from the wishlist card search) into card details.
+      await requireUserId(request, env)
+      const { title } = await readJson<{ title?: unknown }>(request)
+      const text = typeof title === 'string' ? title.trim().slice(0, 300) : ''
+      if (!text) throw new HttpError(400, 'Missing listing title')
+      try {
+        return jsonResponse({ card: await runParseTitle(env, text) })
+      } catch (error) {
+        console.error('parse-listing failed', error)
+        if (error instanceof HttpError) throw error
+        throw new HttpError(502, "Couldn't read that listing. Enter the details below.")
+      }
     },
   ],
   [

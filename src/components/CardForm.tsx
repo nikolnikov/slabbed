@@ -23,6 +23,8 @@ type CardFormProps = {
   hideListPicker?: boolean
   /** Hides the front/back photo inputs (wishlist cards are added without photos). */
   hidePhotos?: boolean
+  /** A front photo to open in the crop screen straight away (e.g. one picked from a card search). */
+  initialCrop?: Blob
 }
 
 type FormValues = {
@@ -37,6 +39,7 @@ type FormValues = {
   cardNumber: string
   sport: string
   variety: string
+  population: string
   notes: string
 }
 
@@ -56,6 +59,7 @@ const toValues = (card: CardInput): FormValues => ({
   cardNumber: card.cardNumber ?? '',
   sport: card.sport ?? '',
   variety: card.variety ?? '',
+  population: card.population?.toString() ?? '',
   notes: card.notes ?? '',
 })
 
@@ -80,6 +84,7 @@ export function CardForm({
   hideDerivedFields = false,
   hideListPicker = false,
   hidePhotos = false,
+  initialCrop,
 }: CardFormProps) {
   const [values, setValues] = useState(() => toValues(initial))
   const [front, setFront] = useState<PhotoValue>(() => initialPhotos?.front ?? refToPhoto(initial.frontImage))
@@ -88,7 +93,10 @@ export function CardForm({
   const [findingPhoto, setFindingPhoto] = useState(false)
   // A found photo, downloaded and waiting to be cropped (or used whole).
   const [downloading, setDownloading] = useState(false)
-  const [cropPhoto, setCropPhoto] = useState<Blob | null>(null)
+  // A new photo (taken, picked or found online) waiting to be cropped, and which side it's for.
+  const [cropping, setCropping] = useState<{ side: 'front' | 'back'; photo: Blob } | null>(() =>
+    initialCrop ? { side: 'front', photo: initialCrop } : null
+  )
   const [cropShape, setCropShape] = useState<CropShape>('slab')
   const [error, setError] = useState<string | null>(null)
 
@@ -126,6 +134,7 @@ export function CardForm({
         cardNumber: orNull(values.cardNumber),
         sport: orNull(values.sport),
         variety: orNull(values.variety),
+        population: values.population ? Number(values.population) : null,
         notes: orNull(values.notes),
         frontImage,
         backImage,
@@ -157,8 +166,8 @@ export function CardForm({
       {!hidePhotos && (
         <div>
           <div className="card-form__photos">
-            <PhotoInput label="Front" value={front} onChange={setFront} />
-            <PhotoInput label="Back" value={back} onChange={setBack} />
+            <PhotoInput label="Front" value={front} onChange={setFront} onOriginal={(photo) => setCropping({ side: 'front', photo })} />
+            <PhotoInput label="Back" value={back} onChange={setBack} onOriginal={(photo) => setCropping({ side: 'back', photo })} />
           </div>
           {!front && (
             <div className="card-form__find-photo">
@@ -187,7 +196,7 @@ export function CardForm({
               setDownloading(true)
               setError(null)
               try {
-                setCropPhoto(await api.fetchRemoteImage(url))
+                setCropping({ side: 'front', photo: await api.fetchRemoteImage(url) })
               } catch {
                 setError("Couldn't download that photo")
               } finally {
@@ -198,17 +207,19 @@ export function CardForm({
           />
         </Modal>
       )}
-      {cropPhoto && (
+      {cropping && (
         <PhotoCropper
-          label="front"
-          photo={cropPhoto}
+          label={cropping.side}
+          photo={cropping.photo}
           shape={cropShape}
           onShapeChange={setCropShape}
           onDone={(blob) => {
-            setFront({ kind: 'new', blob, src: URL.createObjectURL(blob) })
-            setCropPhoto(null)
+            const value = { kind: 'new' as const, blob, src: URL.createObjectURL(blob) }
+            if (cropping.side === 'front') setFront(value)
+            else setBack(value)
+            setCropping(null)
           }}
-          onCancel={() => setCropPhoto(null)}
+          onCancel={() => setCropping(null)}
         />
       )}
 
@@ -265,10 +276,23 @@ export function CardForm({
           <input className="field__input" {...field('brand')} />
         </label>
       </div>
-      <label className="field">
-        <span className="field__label">Variant</span>
-        <input className="field__input" {...field('variety')} />
-      </label>
+      <div className="card-form__row">
+        <label className="field">
+          <span className="field__label">Variant</span>
+          <input className="field__input" {...field('variety')} />
+        </label>
+        <label className="field field--narrow">
+          <span className="field__label">Pop</span>
+          {/* Whole numbers only; inputMode brings up the number pad on phones. */}
+          <input
+            className="field__input"
+            inputMode="numeric"
+            pattern="\d*"
+            value={values.population}
+            onChange={(event) => set('population', event.target.value.replace(/\D/g, ''))}
+          />
+        </label>
+      </div>
       <label className="field">
         <span className="field__label">Notes</span>
         <textarea className="field__input" rows={3} {...field('notes')} />

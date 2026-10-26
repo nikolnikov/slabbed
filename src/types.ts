@@ -58,6 +58,9 @@ export type PhotoResult = {
   listingUrl: string | null
 }
 
+/** Card details found in an eBay listing (title and item specifics); any may be missing. */
+export type ListingDetails = Pick<IdentifiedCard, 'player' | 'year' | 'brand' | 'cardNumber' | 'variety' | 'sport'>
+
 /** What /api/identify reads off card photos; every field may be missing. */
 export type IdentifiedCard = {
   player: string | null
