@@ -1266,6 +1266,11 @@ select.field__input {
     border-color: $color-muted;
   }
 
+  &--dragging {
+    border-color: $color-accent;
+    border-style: solid;
+  }
+
   // The file input is visually hidden but still focusable, so show focus on the frame.
   &:focus-within {
     outline: 2px solid $color-accent;

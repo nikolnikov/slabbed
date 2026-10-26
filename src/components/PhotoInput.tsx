@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, DragEvent } from 'react'
 import { CameraIcon, CloseIcon } from '../icons'
 import type { PhotoValue } from '../types'
 import { optimizePhoto, toDecodablePhoto } from '../utils'
@@ -20,10 +20,15 @@ export function PhotoInput({ label, value, onChange, onOriginal }: PhotoInputPro
   // "Back (optional)" -> "back", for spoken button names like "Upload back photo".
   const name = label.replace(/\s*\(.*\)/, '').toLowerCase()
 
+  const [dragging, setDragging] = useState(false)
+
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file) return
+    if (file) await processFile(file)
+  }
+
+  const processFile = async (file: File) => {
     setError(null)
     try {
       if (onOriginal) return onOriginal(await toDecodablePhoto(file))
@@ -34,13 +39,38 @@ export function PhotoInput({ label, value, onChange, onOriginal }: PhotoInputPro
     }
   }
 
+  const hasFiles = (event: DragEvent) => event.dataTransfer.types.includes('Files')
+
+  // Desktop drag-and-drop; phones never fire these events.
+  const dragProps = {
+    onDragOver: (event: DragEvent) => {
+      if (!hasFiles(event)) return
+      event.preventDefault()
+      setDragging(true)
+    },
+    onDragLeave: (event: DragEvent) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
+    },
+    onDrop: (event: DragEvent) => {
+      if (!hasFiles(event)) return
+      event.preventDefault()
+      setDragging(false)
+      const file = Array.from(event.dataTransfer.files).find((f) => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name))
+      if (file) void processFile(file)
+      else setError('Drop an image file')
+    },
+  }
+
   return (
     <div className="photo-input">
       <span className="photo-input__label">{label}</span>
       <div className="photo-input__box">
         {/* The whole frame picks a photo. Without `capture`, phones offer Take Photo or Photo Library
             and desktops open the file browser. With a photo already there, it picks a replacement. */}
-        <label className="photo-input__frame" title={value ? `Replace ${name} photo` : `Add ${name} photo`}>
+        <label
+          className={`photo-input__frame${dragging ? ' photo-input__frame--dragging' : ''}`}
+          {...dragProps}
+          title={value ? `Replace ${name} photo` : `Add ${name} photo`}>
           {value ? (
             <img src={value.src} alt={label} />
           ) : (
