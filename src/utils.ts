@@ -176,7 +176,8 @@ const NAME_WORD = /^["“”‘’']?\p{L}[\p{L}'’.-]*["“”‘’']?$/u
  * "Griffey"), otherwise the whole name from its first letter ("Clay VS. Liston" sorts under C).
  */
 const sortName = (name: string): string => {
-  const words = nameWords(name)
+  // A multi-word nickname in double quotes (Ed "Too Tall" Jones) doesn't count towards the name.
+  const words = nameWords(name.replace(/["“”][^"“”]*\s[^"“”]*["“”]/g, ' '))
   const isPersonName = !NOT_ONE_PERSON.test(name) && words.length <= 3 && words.every((word) => NAME_WORD.test(word))
   return isPersonName ? (words[words.length - 1] ?? '') : name.trim()
 }
