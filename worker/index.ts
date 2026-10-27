@@ -420,7 +420,7 @@ const IDENTIFY_PROMPT = `You identify sports trading cards from photos. The phot
 
 Read printed text exactly as it appears. When a grading label is visible (a PSA, BGS/Beckett, SGC or TAG slab's label), it is the most reliable source for year, set, card number, player, grade and cert number, so prefer it over the card itself. Otherwise use the card front and back (the back usually has the card number, set name and copyright year).
 
-"brand" is the full product/set name including the manufacturer, exactly as on the label or card back: e.g. "Panini Donruss Optic", "Topps Chrome", "Upper Deck Young Guns". Never shorten it to just the manufacturer ("Panini", "Topps"). Leave out the card's own year, which goes in "year": a 2018 card is year "2018" and brand "Panini Donruss Optic", not "2018 Panini Donruss Optic". Keep a year that is part of the set's name and differs from the card's year, e.g. a 2016 card from "Donruss Panini 1987 Classic" keeps "1987".
+"brand" is the full product/set name including the manufacturer, exactly as on the label or card back: e.g. "Panini Donruss Optic", "Topps Chrome", "Upper Deck Young Guns". Never shorten it to just the manufacturer ("Panini", "Topps"). Don't add the sport to it: Panini Phoenix is "Panini Phoenix", never "Panini Phoenix Football", unless the card itself prints an extra word in the set name. Leave out the card's own year, which goes in "year": a 2018 card is year "2018" and brand "Panini Donruss Optic", not "2018 Panini Donruss Optic". Keep a year that is part of the set's name and differs from the card's year, e.g. a 2016 card from "Donruss Panini 1987 Classic" keeps "1987".
 
 Use null for anything that isn't visible or that you can't determine confidently. Never guess a cert number or card number. "variety" is the parallel/insert/subset name if any (e.g. "Rated Rookie", "Silver Prizm", "Refractor"), else null. "sport" is a single word like Baseball, Basketball, Football, Hockey or Soccer.`
 
@@ -479,6 +479,10 @@ const brandWithoutYear = (brand: string | null, year: string | null): string | n
   return trimmed || null
 }
 
+// Panini Phoenix is always just "Panini Phoenix"; models tend to tack the sport on as "Panini Phoenix Football".
+const cleanBrand = (brand: string | null, year: string | null): string | null =>
+  brandWithoutYear(brand?.replace(/\b(Phoenix)\s+(?:football)\b/i, '$1').replace(/\s{2,}/g, ' ').trim() || null, year)
+
 const ALL_CAPS = /^[^a-z]*[A-Z][^a-z]*$/
 const titleCase = (value: string) => value.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (m) => m.toUpperCase())
 
@@ -492,7 +496,7 @@ const cleanIdentified = (card: IdentifiedCard): IdentifiedCard => {
     // Labels are printed in capitals; keep suffixes like "II" upper-case.
     player: player && ALL_CAPS.test(player) ? titleCase(player).replace(/\b(Ii|Iii|Iv)\b/g, (s) => s.toUpperCase()) : player,
     year,
-    brand: brandWithoutYear(str(card.brand), year),
+    brand: cleanBrand(str(card.brand), year),
     cardNumber: str(card.cardNumber, 30)?.replace(/^#\s*/, '') ?? null,
     variety: str(card.variety),
     sport: str(card.sport, 50),
@@ -532,7 +536,7 @@ const runParseTitle = async (env: Env, title: string) => {
   const sport = card.sport ?? (sportWord ? sportWord[0].toUpperCase() + sportWord.slice(1).toLowerCase() : null)
   // "Rookie" / "RC" describe the card, but aren't a parallel or insert.
   const variety = card.variety && /^(rookie( card)?|rc)$/i.test(card.variety) ? null : card.variety
-  return { ...card, year, brand: brandWithoutYear(brand, year), sport, variety }
+  return { ...card, year, brand: cleanBrand(brand, year), sport, variety }
 }
 
 const runIdentify = async (env: Env, model: IdentifyModel, images: string[]) => {
@@ -979,7 +983,7 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
         card: {
           player: pick('player'),
           year,
-          brand: brandWithoutYear(pick('brand'), year),
+          brand: cleanBrand(pick('brand'), year),
           cardNumber: pick('cardNumber'),
           variety: pick('variety'),
           sport: pick('sport'),
