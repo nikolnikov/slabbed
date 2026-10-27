@@ -88,9 +88,8 @@ export function PhotoCropper({ label, photo, shape, onShapeChange, onDone, onCan
     return { scale, x: clamp(next.x, -maxX, maxX), y: clamp(next.y, -maxY, maxY) }
   }
 
-  // Starts with the whole photo in view where possible.
-  const initialScale = image && box ? Math.min(box.width / image.width, box.height / image.height) : 1
-  const resolve = (stored: View | null) => fit(stored ?? { scale: initialScale, x: 0, y: 0 })
+  // Starts fully zoomed out (zoom slider at its minimum), the photo just covering the frame.
+  const resolve = (stored: View | null) => fit(stored ?? { scale: minScale, x: 0, y: 0 })
   const current = resolve(view)
 
   /** Zooms by `factor` around a point given relative to the viewport's center. */
