@@ -420,7 +420,7 @@ const IDENTIFY_PROMPT = `You identify sports trading cards from photos. The phot
 
 Read printed text exactly as it appears. When a grading label is visible (a PSA, BGS/Beckett, SGC or TAG slab's label), it is the most reliable source for year, set, card number, player, grade and cert number, so prefer it over the card itself. Otherwise use the card front and back (the back usually has the card number, set name and copyright year).
 
-"brand" is the full product/set name including the manufacturer, exactly as on the label or card back: e.g. "Panini Donruss Optic", "Topps Chrome", "Upper Deck Young Guns". Never shorten it to just the manufacturer ("Panini", "Topps"). Don't add the sport to it: Panini Phoenix is "Panini Phoenix", never "Panini Phoenix Football", unless the card itself prints an extra word in the set name. Leave out the card's own year, which goes in "year": a 2018 card is year "2018" and brand "Panini Donruss Optic", not "2018 Panini Donruss Optic". Keep a year that is part of the set's name and differs from the card's year, e.g. a 2016 card from "Donruss Panini 1987 Classic" keeps "1987".
+"brand" is the full product/set name including the manufacturer, exactly as on the label or card back: e.g. "Panini Donruss Optic", "Topps Chrome", "Upper Deck Young Guns". Never shorten it to just the manufacturer ("Panini", "Topps"). Don't add the sport to it: Any Phoenix set is just "Panini Phoenix", never "Panini Phoenix Football" or "Panini Phoenix Baseball"; the sport goes only in "sport". Only keep an extra word if the card itself prints it as part of the set name. Leave out the card's own year, which goes in "year": a 2018 card is year "2018" and brand "Panini Donruss Optic", not "2018 Panini Donruss Optic". Keep a year that is part of the set's name and differs from the card's year, e.g. a 2016 card from "Donruss Panini 1987 Classic" keeps "1987".
 
 Use null for anything that isn't visible or that you can't determine confidently. Never guess a cert number or card number. "variety" is the parallel/insert/subset name if any (e.g. "Rated Rookie", "Silver Prizm", "Refractor"), else null. "sport" is a single word like Baseball, Basketball, Football, Hockey or Soccer.`
 
@@ -479,9 +479,13 @@ const brandWithoutYear = (brand: string | null, year: string | null): string | n
   return trimmed || null
 }
 
-// Panini Phoenix is always just "Panini Phoenix"; models tend to tack the sport on as "Panini Phoenix Football".
-const cleanBrand = (brand: string | null, year: string | null): string | null =>
-  brandWithoutYear(brand?.replace(/\b(Phoenix)\s+(?:football)\b/i, '$1').replace(/\s{2,}/g, ' ').trim() || null, year)
+// Any Phoenix set is just "Panini Phoenix"; models tend to tack the sport on ("Panini Phoenix Football",
+// "Football Panini Phoenix"). The sport belongs in its own field.
+const SPORT_WORD = /\s*\b(baseball|basketball|football|hockey|soccer)\b/gi
+const cleanBrand = (brand: string | null, year: string | null): string | null => {
+  const stripped = brand && /\bphoenix\b/i.test(brand) ? brand.replace(SPORT_WORD, '').replace(/\s{2,}/g, ' ').trim() : brand
+  return brandWithoutYear(stripped || null, year)
+}
 
 const ALL_CAPS = /^[^a-z]*[A-Z][^a-z]*$/
 const titleCase = (value: string) => value.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (m) => m.toUpperCase())
